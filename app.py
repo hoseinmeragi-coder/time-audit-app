@@ -2,6 +2,7 @@ import datetime
 from datetime import date, datetime, time, timedelta
 import gspread
 from google.oauth2.service_account import Credentials
+import jdatetime
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
@@ -86,6 +87,36 @@ ROUTINE_TASKS = [
     "🍽️ شام و استراحت",
     "📖 مطالعه روزانه",
 ]
+
+# تابع کمکی برای انتخاب تاریخ شمسی و بازگرداندن خروجی میلادی استاندارد
+def jalali_date_picker(label: str, default_date: date = None, key: str = "j_date"):
+    if default_date is None:
+        default_date = date.today()
+    j_def = jdatetime.date.fromgregorian(date=default_date)
+    
+    st.markdown(f"<p style='font-size: 0.88rem; margin-bottom: 4px; font-weight: 600;'>{label}</p>", unsafe_allow_html=True)
+    c_y, c_m, c_d = st.columns([1.2, 1, 1])
+    
+    years = list(range(j_def.year - 2, j_def.year + 4))
+    months = list(range(1, 13))
+    
+    with c_y:
+        sel_y = st.selectbox("سال", years, index=years.index(j_def.year) if j_def.year in years else 0, key=f"{key}_y", label_visibility="collapsed")
+    with c_m:
+        sel_m = st.selectbox("ماه", months, index=j_def.month - 1, key=f"{key}_m", label_visibility="collapsed")
+    
+    max_days = 29 if sel_m == 12 else (30 if sel_m > 6 else 31)
+    days = list(range(1, max_days + 1))
+    init_day = min(j_def.day, max_days)
+    
+    with c_d:
+        sel_d = st.selectbox("روز", days, index=init_day - 1, key=f"{key}_d", label_visibility="collapsed")
+        
+    try:
+        j_obj = jdatetime.date(sel_y, sel_m, sel_d)
+        return j_obj.togregorian()
+    except Exception:
+        return default_date
 
 # ==========================================
 # ۲. ارتباط مستقیم با Google Sheets
@@ -313,6 +344,7 @@ with tab_goals:
 
     with col_gform:
         st.markdown("##### ➕ تعریف هدف یا پروژه جدید")
+        g_target_date = jalali_date_picker("ددلاین / تاریخ هدف:", default_date=date.today() + timedelta(days=14), key="goal_date_pick")
         with st.form("new_goal_form", clear_on_submit=True):
             g_title = st.text_input("عنوان هدف / پروژه:", placeholder="مثال: استخدام دستیار، تسلط بر ستاپ‌های معاملاتی")
             g_type = st.selectbox("نوع هدف:", ["کوتاه‌مدت (هفتگی/ماهانه)", "بلندمدت (فصلی/سالانه)"])
@@ -327,7 +359,6 @@ with tab_goals:
                     "👤 شخصی",
                 ],
             )
-            g_target_date = st.date_input("ددلاین / تاریخ هدف:", value=date.today() + timedelta(days=14))
             g_prog = st.slider("درصد پیشرفت اولیه:", min_value=0, max_value=100, value=0, step=5)
 
             g_submit = st.form_submit_button("ثبت هدف در فضای ابری", use_container_width=True)
@@ -369,10 +400,16 @@ with tab_goals:
             for _, row in goals_df.iterrows():
                 col_ginfo, col_gprog, col_gdel = st.columns([0.5, 0.4, 0.1])
                 with col_ginfo:
+                    try:
+                        g_dt = datetime.strptime(str(row['target_date']), "%Y-%m-%d").date()
+                        j_target_str = str(jdatetime.date.fromgregorian(date=g_dt))
+                    except Exception:
+                        j_target_str = str(row['target_date'])
+                        
                     st.markdown(
                         f"""
                         <div style="font-weight: 700; color: #F8FAFC;">{row['title']}</div>
-                        <div style="font-size: 0.82rem; color: #94A3B8;">{row['category']} • {row['goal_type']} • 📅 ددلاین: {row['target_date']}</div>
+                        <div style="font-size: 0.82rem; color: #94A3B8;">{row['category']} • {row['goal_type']} • 📅 ددلاین: {j_target_str}</div>
                         """,
                         unsafe_allow_html=True,
                     )
@@ -401,9 +438,9 @@ with tab_goals:
 with tab_plan:
     st.subheader("🌅 برنامه‌ریزی اهداف، روتین‌ها و تسک‌های روز")
 
-    col_view, _ = st.columns([1, 3])
+    col_view, _ = st.columns([1.5, 2.5])
     with col_view:
-        plan_date = st.date_input("انتخاب تاریخ برای برنامه‌ریزی:", value=date.today(), key="plan_date_pick")
+        plan_date = jalali_date_picker("انتخاب تاریخ برای برنامه‌ریزی:", default_date=date.today(), key="plan_date_pick")
 
     p_df = get_planned_tasks(plan_date)
     plan_total_min = p_df["est_minutes"].sum() if not p_df.empty else 0
@@ -478,7 +515,8 @@ with tab_plan:
                     st.error("لطفاً عنوانی را برای تسک مشخص کنید.")
 
     with col_list:
-        st.markdown(f"##### 📋 برنامه‌ریزی روز {plan_date}")
+        j_plan_date_str = str(jdatetime.date.fromgregorian(date=plan_date))
+        st.markdown(f"##### 📋 برنامه‌ریزی روز {j_plan_date_str}")
 
         if p_df.empty:
             st.info("برای این روز هنوز برنامه‌ای تعریف نشده است.")
@@ -561,9 +599,9 @@ with tab_log:
     st.subheader("⏱️ ثبت کارهای انجام‌شده و چرخه ۲۴ ساعته عملکرد")
     st.caption("در این بخش رویدادهای رخ‌داده در طول روز را با ساعت دقیق ثبت کنید.")
 
-    col_audit_date, _ = st.columns([1, 3])
+    col_audit_date, _ = st.columns([1.5, 2.5])
     with col_audit_date:
-        audit_date = st.date_input("تاریخ ثبت وقایع:", value=date.today(), key="audit_date_pick")
+        audit_date = jalali_date_picker("تاریخ ثبت وقایع:", default_date=date.today(), key="audit_date_pick")
 
     a_df = get_actual_logs(audit_date)
     total_act_min = a_df["duration_minutes"].sum() if not a_df.empty else 0
@@ -682,7 +720,8 @@ with tab_log:
                     st.error("لطفاً عنوان فعالیت را وارد کنید.")
 
     with col_llist:
-        st.markdown(f"##### 📜 وقایع ثبت‌شده در {audit_date}")
+        j_audit_date_str = str(jdatetime.date.fromgregorian(date=audit_date))
+        st.markdown(f"##### 📜 وقایع ثبت‌شده در {j_audit_date_str}")
 
         if a_df.empty:
             st.info("هنوز فعالیتی ثبت نشده است.")
@@ -757,7 +796,7 @@ with tab_log:
 with tab_analytics:
     st.subheader("📈 داشبورد عارضه‌یابی و آنالیز بهره‌وری")
 
-    col_filter1, col_filter2, _ = st.columns([1, 1, 2])
+    col_filter1, col_filter2, _ = st.columns([1, 1.5, 1.5])
     with col_filter1:
         date_range_preset = st.selectbox(
             "بازه تحلیل:",
@@ -778,20 +817,15 @@ with tab_analytics:
         s_date, e_date = today - timedelta(days=30), today
     else:
         with col_filter2:
-            custom_range = st.date_input(
-                "بازه تاریخ:",
-                value=(today - timedelta(days=14), today),
-                key="custom_range_pick",
-            )
-            if isinstance(custom_range, tuple) and len(custom_range) == 2:
-                s_date, e_date = custom_range
-            else:
-                s_date, e_date = today, today
+            s_date = jalali_date_picker("از تاریخ:", default_date=today - timedelta(days=14), key="an_s_pick")
+            e_date = jalali_date_picker("تا تاریخ:", default_date=today, key="an_e_pick")
 
     analytics_df = get_logs_range(s_date, e_date)
 
     if analytics_df.empty:
-        st.warning(f"برای بازه زمانی {s_date} تا {e_date} فعالیتی ثبت نشده است.")
+        j_s = str(jdatetime.date.fromgregorian(date=s_date))
+        j_e = str(jdatetime.date.fromgregorian(date=e_date))
+        st.warning(f"برای بازه زمانی {j_s} تا {j_e} فعالیتی ثبت نشده است.")
     else:
         total_tracked = analytics_df["duration_minutes"].sum()
         prod_hours = round(
@@ -887,9 +921,21 @@ with tab_analytics:
                 st.plotly_chart(fig_waste, use_container_width=True)
 
         st.markdown("##### 📅 روند تفکیک روزانه (ساعت)")
+        
+        # تبدیل تاریخ‌های ستون لاگ به شمسی جهت نمایش در محور نمودار
+        analytics_df_plot = analytics_df.copy()
+        def to_jalali_str(g_str):
+            try:
+                g_d = datetime.strptime(str(g_str), "%Y-%m-%d").date()
+                return str(jdatetime.date.fromgregorian(date=g_d))
+            except Exception:
+                return str(g_str)
+                
+        analytics_df_plot["jalali_date"] = analytics_df_plot["log_date"].apply(to_jalali_str)
+
         pivot_daily = (
-            analytics_df.pivot_table(
-                index="log_date",
+            analytics_df_plot.pivot_table(
+                index="jalali_date",
                 columns="activity_type",
                 values="duration_minutes",
                 aggfunc="sum",
@@ -904,7 +950,7 @@ with tab_analytics:
         if "کار مفید" in pivot_daily.columns:
             fig_trend.add_trace(
                 go.Bar(
-                    x=pivot_daily["log_date"],
+                    x=pivot_daily["jalali_date"],
                     y=pivot_daily["کار مفید"],
                     name="کار مفید",
                     marker_color="#10B981",
@@ -913,7 +959,7 @@ with tab_analytics:
         if "روتین و ضروری" in pivot_daily.columns:
             fig_trend.add_trace(
                 go.Bar(
-                    x=pivot_daily["log_date"],
+                    x=pivot_daily["jalali_date"],
                     y=pivot_daily["روتین و ضروری"],
                     name="روتین و ضروری",
                     marker_color="#64748B",
@@ -922,7 +968,7 @@ with tab_analytics:
         if "اتلاف وقت" in pivot_daily.columns:
             fig_trend.add_trace(
                 go.Bar(
-                    x=pivot_daily["log_date"],
+                    x=pivot_daily["jalali_date"],
                     y=pivot_daily["اتلاف وقت"],
                     name="اتلاف وقت",
                     marker_color="#EF4444",
