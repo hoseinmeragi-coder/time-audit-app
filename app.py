@@ -569,12 +569,31 @@ with tab_log:
     total_act_min = a_df["duration_minutes"].sum() if not a_df.empty else 0
     remaining_min = max(0, 1440 - total_act_min)
 
+    # دریافت تسک‌های انجام‌شده (تیک‌خورده) مربوط به همین تاریخ
+    done_planned_df = get_planned_tasks(audit_date)
+    if not done_planned_df.empty:
+        done_planned_df = done_planned_df[done_planned_df["status"] == "done"]
+
+    done_tasks_dict = {}
+    done_task_options = ["--- انتخاب از کارهای انجام‌شده برنامه ---"]
+    if not done_planned_df.empty:
+        for _, row_d in done_planned_df.iterrows():
+            time_part = f" ({row_d['start_time']} تا {row_d['end_time']})" if row_d.get("start_time") else ""
+            opt_label = f"✅ {row_d['title']}{time_part} - [{row_d['category']}]"
+            done_task_options.append(opt_label)
+            done_tasks_dict[opt_label] = row_d
+
     col_lform, col_llist, col_chart24 = st.columns([1.1, 1.3, 1.2], gap="medium")
 
     with col_lform:
         st.markdown("##### 📝 فرم ثبت رویداد")
         with st.form("actual_log_form", clear_on_submit=True):
-            l_preset = st.selectbox("انتخاب سریع کارهای روتین:", ROUTINE_TASKS, key="l_preset_sel")
+            l_done_plan = st.selectbox(
+                "انتخاب کار انجام‌شده از برنامه روز:",
+                done_task_options,
+                key="l_done_plan_sel"
+            )
+            l_preset = st.selectbox("یا انتخاب سریع کارهای روتین:", ROUTINE_TASKS, key="l_preset_sel")
             l_custom_title = st.text_input("یا عنوان کار را دستی تایپ کنید:", placeholder="مثلاً: جلسه کاری، تحلیل چارت", key="l_custom_title_input")
 
             l_type = st.selectbox(
@@ -612,11 +631,34 @@ with tab_log:
             l_submit = st.form_submit_button("ثبت در وقایع روز", use_container_width=True)
 
             if l_submit:
-                final_title = l_custom_title.strip() if l_custom_title.strip() else (
-                    l_preset if l_preset != "--- انتخاب روتین ---" else ""
-                )
+                if l_custom_title.strip():
+                    final_title = l_custom_title.strip()
+                    chosen_cat = l_cat
+                    final_duration = l_duration
+                    final_s_time = l_s_time.strftime("%H:%M")
+                    final_e_time = l_e_time.strftime("%H:%M")
+                elif l_done_plan != "--- انتخاب از کارهای انجام‌شده برنامه ---":
+                    selected_task = done_tasks_dict[l_done_plan]
+                    final_title = selected_task["title"]
+                    chosen_cat = selected_task.get("category", l_cat)
+                    task_est = int(selected_task.get("est_minutes", 0))
+                    final_duration = task_est if task_est > 0 else l_duration
+                    final_s_time = selected_task.get("start_time") if selected_task.get("start_time") else l_s_time.strftime("%H:%M")
+                    final_e_time = selected_task.get("end_time") if selected_task.get("end_time") else l_e_time.strftime("%H:%M")
+                elif l_preset != "--- انتخاب روتین ---":
+                    final_title = l_preset
+                    chosen_cat = l_cat
+                    final_duration = l_duration
+                    final_s_time = l_s_time.strftime("%H:%M")
+                    final_e_time = l_e_time.strftime("%H:%M")
+                else:
+                    final_title = ""
+                    chosen_cat = l_cat
+                    final_duration = l_duration
+                    final_s_time = l_s_time.strftime("%H:%M")
+                    final_e_time = l_e_time.strftime("%H:%M")
 
-                if final_title and l_duration > 0:
+                if final_title and final_duration > 0:
                     clean_type = (
                         "کار مفید"
                         if "مفید" in l_type
@@ -624,17 +666,17 @@ with tab_log:
                     )
                     add_actual_log(
                         final_title,
-                        l_cat,
+                        chosen_cat,
                         clean_type,
                         str(audit_date),
-                        int(l_duration),
-                        l_s_time.strftime("%H:%M"),
-                        l_e_time.strftime("%H:%M"),
+                        int(final_duration),
+                        final_s_time,
+                        final_e_time,
                         l_notes.strip(),
                     )
                     st.success("فعالیت ثبت شد.")
                     st.rerun()
-                elif l_duration <= 0:
+                elif final_duration <= 0:
                     st.error("ساعت پایان باید بعد از ساعت شروع باشد.")
                 else:
                     st.error("لطفاً عنوان فعالیت را وارد کنید.")
