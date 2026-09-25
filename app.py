@@ -371,32 +371,13 @@ with tab_goals:
                     st.error("لطفاً عنوان هدف را وارد کنید.")
 
     with col_glist:
-        st.markdown("##### 📊 وضعیت و پیشرفت اهداف")
+        st.markdown("##### 📋 لیست و مدیریت اهداف")
         goals_df = get_all_goals()
 
         if goals_df.empty:
             st.info("هنوز هدفی ثبت نشده است. از فرم سمت راست اولین هدف خود را ایجاد کنید.")
         else:
-            fig_goals = px.bar(
-                goals_df,
-                x="progress",
-                y="title",
-                orientation="h",
-                color="category",
-                range_x=[0, 100],
-                labels={"progress": "درصد پیشرفت (%)", "title": "عنوان هدف"},
-            )
-            fig_goals.update_layout(
-                font=dict(family="Vazirmatn", color="#CBD5E1"),
-                paper_bgcolor="rgba(0,0,0,0)",
-                plot_bgcolor="rgba(0,0,0,0)",
-                xaxis=dict(showgrid=True, gridcolor="#334155"),
-                yaxis=dict(showgrid=False),
-                margin=dict(t=10, b=10, l=10, r=10),
-            )
-            st.plotly_chart(fig_goals, use_container_width=True)
-
-            st.write("")
+            # ۱. قرارگیری لیست اهداف در بخش بالا و تنظیم رنگ متناسب با تم تیره و روشن
             for _, row in goals_df.iterrows():
                 col_ginfo, col_gprog, col_gdel = st.columns([0.5, 0.4, 0.1])
                 with col_ginfo:
@@ -408,8 +389,8 @@ with tab_goals:
                         
                     st.markdown(
                         f"""
-                        <div style="font-weight: 700; color: #F8FAFC;">{row['title']}</div>
-                        <div style="font-size: 0.82rem; color: #94A3B8;">{row['category']} • {row['goal_type']} • 📅 ددلاین: {j_target_str}</div>
+                        <div style="font-weight: 700; color: var(--text-color, inherit);">{row['title']}</div>
+                        <div style="font-size: 0.82rem; color: #64748B;">{row['category']} • {row['goal_type']} • 📅 ددلاین: {j_target_str}</div>
                         """,
                         unsafe_allow_html=True,
                     )
@@ -430,7 +411,30 @@ with tab_goals:
                     if st.button("🗑️", key=f"del_goal_{row['id']}"):
                         delete_goal(row["id"])
                         st.rerun()
-                st.markdown("<hr style='margin: 4px 0; border: none; border-top: 1px solid #334155;' />", unsafe_allow_html=True)
+                st.markdown("<hr style='margin: 4px 0; border: none; border-top: 1px solid rgba(148, 163, 184, 0.2);' />", unsafe_allow_html=True)
+
+            st.write("")
+            st.markdown("##### 📊 وضعیت و پیشرفت اهداف")
+            
+            # ۲. قرارگیری نمودار پیشرفت اهداف در پایین لیست
+            fig_goals = px.bar(
+                goals_df,
+                x="progress",
+                y="title",
+                orientation="h",
+                color="category",
+                range_x=[0, 100],
+                labels={"progress": "درصد پیشرفت (%)", "title": "عنوان هدف"},
+            )
+            fig_goals.update_layout(
+                font=dict(family="Vazirmatn"),
+                paper_bgcolor="rgba(0,0,0,0)",
+                plot_bgcolor="rgba(0,0,0,0)",
+                xaxis=dict(showgrid=True, gridcolor="rgba(148, 163, 184, 0.2)"),
+                yaxis=dict(showgrid=False),
+                margin=dict(t=10, b=10, l=10, r=10),
+            )
+            st.plotly_chart(fig_goals, use_container_width=True)
 
 # ----------------------------------------------------
 # تب دوم: برنامه‌ریزی روزانه
@@ -535,12 +539,12 @@ with tab_plan:
                         update_task_status(row["id"], "done" if checked else "pending")
                         st.rerun()
                 with c_txt:
-                    style = "text-decoration: line-through; color: #64748B;" if done else "font-weight: 600; color: #F8FAFC;"
+                    style = "text-decoration: line-through; color: #94A3B8;" if done else "font-weight: 600; color: var(--text-color, inherit);"
                     time_range_str = f"⏰ {row['start_time']} تا {row['end_time']} • " if row.get("start_time") else ""
                     st.markdown(
                         f"""
                         <div style="{style} font-size: 1rem;">{row['title']}</div>
-                        <div style="font-size: 0.82rem; color: #94A3B8;">
+                        <div style="font-size: 0.82rem; color: #64748B;">
                             {time_range_str}{row['category']} • {row['priority']} • ⏳ {row['est_minutes']} دقیقه
                         </div>
                         """,
@@ -550,7 +554,7 @@ with tab_plan:
                     if st.button("🗑️", key=f"p_del_{row['id']}"):
                         delete_planned_task(row["id"])
                         st.rerun()
-                st.markdown("<hr style='margin: 6px 0; border: none; border-top: 1px solid #334155;' />", unsafe_allow_html=True)
+                st.markdown("<hr style='margin: 6px 0; border: none; border-top: 1px solid rgba(148, 163, 184, 0.2);' />", unsafe_allow_html=True)
 
     with col_chart_plan:
         st.markdown("##### ⏱️ چرخه ۲۴ ساعته برنامه‌ریزی")
@@ -564,11 +568,11 @@ with tab_plan:
                 names="category",
                 hole=0.65,
                 color="category",
-                color_discrete_map={"برنامه‌ریزی نشده (خالی)": "#1E293B"},
+                color_discrete_map={"برنامه‌ریزی نشده (خالی)": "#64748B"},
             )
             total_plan_hours = round(plan_total_min / 60, 1)
             fig_plan_24.update_layout(
-                font=dict(family="Vazirmatn", color="#CBD5E1"),
+                font=dict(family="Vazirmatn"),
                 paper_bgcolor="rgba(0,0,0,0)",
                 plot_bgcolor="rgba(0,0,0,0)",
                 margin=dict(t=10, b=10, l=10, r=10),
@@ -586,7 +590,7 @@ with tab_plan:
             )
             st.plotly_chart(fig_plan_24, use_container_width=True)
             st.markdown(
-                f"<div style='text-align:center; color:#94A3B8;'>زمان برنامه‌ریزی‌نشده: <b>{round(plan_remaining_min/60, 1)} ساعت</b></div>",
+                f"<div style='text-align:center; color:#64748B;'>زمان برنامه‌ریزی‌نشده: <b>{round(plan_remaining_min/60, 1)} ساعت</b></div>",
                 unsafe_allow_html=True,
             )
         else:
@@ -741,8 +745,8 @@ with tab_log:
 
                     st.markdown(
                         f"""
-                        <div style="font-weight: 600; color: #F8FAFC;">{row['title']}{notes_txt}</div>
-                        <div style="font-size: 0.85rem; color: #94A3B8; margin-top: 2px;">
+                        <div style="font-weight: 600; color: var(--text-color, inherit);">{row['title']}{notes_txt}</div>
+                        <div style="font-size: 0.85rem; color: #64748B; margin-top: 2px;">
                             <span class="{badge_class}">{row['activity_type']}</span> • 
                             <span>{exact_range}{row['category']}</span> • 
                             <span>⏱️ {time_str}</span>
@@ -754,7 +758,7 @@ with tab_log:
                     if st.button("🗑️", key=f"a_del_{row['id']}"):
                         delete_actual_log(row["id"])
                         st.rerun()
-                st.markdown("<hr style='margin: 6px 0; border: none; border-top: 1px solid #334155;' />", unsafe_allow_html=True)
+                st.markdown("<hr style='margin: 6px 0; border: none; border-top: 1px solid rgba(148, 163, 184, 0.2);' />", unsafe_allow_html=True)
 
     with col_chart24:
         st.markdown("##### ⏱️ چرخه ۲۴ ساعته روز")
@@ -772,12 +776,12 @@ with tab_log:
                     "کار مفید": "#10B981",
                     "اتلاف وقت": "#EF4444",
                     "روتین و ضروری": "#64748B",
-                    "ثبت نشده (خالی)": "#1E293B",
+                    "ثبت نشده (خالی)": "#475569",
                 },
             )
             total_logged_hours = round(total_act_min / 60, 1)
             fig_24.update_layout(
-                font=dict(family="Vazirmatn", color="#CBD5E1"),
+                font=dict(family="Vazirmatn"),
                 paper_bgcolor="rgba(0,0,0,0)",
                 plot_bgcolor="rgba(0,0,0,0)",
                 margin=dict(t=10, b=10, l=10, r=10),
@@ -786,7 +790,7 @@ with tab_log:
                 annotations=[dict(text=f"{total_logged_hours} / 24<br>ساعت", x=0.5, y=0.5, font_size=16, showarrow=False)],
             )
             st.plotly_chart(fig_24, use_container_width=True)
-            st.markdown(f"<div style='text-align:center; color:#94A3B8;'>زمان ثبت نشده: <b>{round(remaining_min/60, 1)} ساعت</b></div>", unsafe_allow_html=True)
+            st.markdown(f"<div style='text-align:center; color:#64748B;'>زمان ثبت نشده: <b>{round(remaining_min/60, 1)} ساعت</b></div>", unsafe_allow_html=True)
         else:
             st.info("پس از ثبت اولین فعالیت، نمودار ۲۴ ساعته تشکیل می‌شود.")
 
@@ -857,7 +861,7 @@ with tab_analytics:
             )
         with k3:
             st.markdown(
-                f"""<div class="metric-card"><h3 style="color:#94A3B8;">{routine_hours} ساعت</h3><p>امور روتین و اداری</p></div>""",
+                f"""<div class="metric-card"><h3 style="color:#CBD5E1;">{routine_hours} ساعت</h3><p>امور روتین و اداری</p></div>""",
                 unsafe_allow_html=True,
             )
         with k4:
@@ -888,7 +892,7 @@ with tab_analytics:
                 },
             )
             fig_type.update_layout(
-                font=dict(family="Vazirmatn", color="#CBD5E1"),
+                font=dict(family="Vazirmatn"),
                 paper_bgcolor="rgba(0,0,0,0)",
                 plot_bgcolor="rgba(0,0,0,0)",
                 margin=dict(t=20, b=20, l=10, r=10),
@@ -911,7 +915,7 @@ with tab_analytics:
                     color_discrete_sequence=["#EF4444"],
                 )
                 fig_waste.update_layout(
-                    font=dict(family="Vazirmatn", color="#CBD5E1"),
+                    font=dict(family="Vazirmatn"),
                     paper_bgcolor="rgba(0,0,0,0)",
                     plot_bgcolor="rgba(0,0,0,0)",
                     xaxis=dict(title="ساعت هدر رفته", showgrid=False),
@@ -977,11 +981,11 @@ with tab_analytics:
 
         fig_trend.update_layout(
             barmode="stack",
-            font=dict(family="Vazirmatn", color="#CBD5E1"),
+            font=dict(family="Vazirmatn"),
             paper_bgcolor="rgba(0,0,0,0)",
             plot_bgcolor="rgba(0,0,0,0)",
             xaxis=dict(title="تاریخ", showgrid=False),
-            yaxis=dict(title="ساعت", showgrid=True, gridcolor="#334155"),
+            yaxis=dict(title="ساعت", showgrid=True, gridcolor="rgba(148, 163, 184, 0.2)"),
             margin=dict(t=20, b=20, l=10, r=10),
             legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
         )
