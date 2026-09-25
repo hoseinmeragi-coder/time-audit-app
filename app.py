@@ -208,6 +208,20 @@ def update_goal_progress(goal_id, progress):
             save_sheet_df("goals", df)
 
 
+def update_goal_full(goal_id, title, category, goal_type, target_date, progress):
+    df = get_all_goals()
+    if not df.empty:
+        idx = df[df["id"] == str(goal_id)].index
+        if not idx.empty:
+            df.loc[idx, "title"] = title
+            df.loc[idx, "category"] = category
+            df.loc[idx, "goal_type"] = goal_type
+            df.loc[idx, "target_date"] = str(target_date)
+            df.loc[idx, "progress"] = int(progress)
+            df.loc[idx, "status"] = "completed" if int(progress) >= 100 else "active"
+            save_sheet_df("goals", df)
+
+
 def delete_goal(goal_id):
     df = get_all_goals()
     if not df.empty:
@@ -254,6 +268,20 @@ def update_task_status(task_id, new_status):
         idx = df[df["id"] == str(task_id)].index
         if not idx.empty:
             df.loc[idx, "status"] = new_status
+            save_sheet_df("planned_tasks", df)
+
+
+def update_planned_task_full(task_id, title, category, priority, est_minutes, start_time, end_time):
+    df = load_sheet_df("planned_tasks")
+    if not df.empty:
+        idx = df[df["id"] == str(task_id)].index
+        if not idx.empty:
+            df.loc[idx, "title"] = title
+            df.loc[idx, "category"] = category
+            df.loc[idx, "priority"] = priority
+            df.loc[idx, "est_minutes"] = int(est_minutes)
+            df.loc[idx, "start_time"] = str(start_time)
+            df.loc[idx, "end_time"] = str(end_time)
             save_sheet_df("planned_tasks", df)
 
 
@@ -351,7 +379,7 @@ with tab_goals:
             g_cat = st.selectbox(
                 "دسته‌بندی هدف:",
                 [
-                    "🌸🌙 مون فلو",
+                    "💼 کسب‌وکار و مالی",
                     "🎯 ترید و سرمایه‌گذاری",
                     "📚 مهارت و یادگیری",
                     "❤️ روابط و خانواده",
@@ -377,9 +405,8 @@ with tab_goals:
         if goals_df.empty:
             st.info("هنوز هدفی ثبت نشده است. از فرم سمت راست اولین هدف خود را ایجاد کنید.")
         else:
-            # ۱. قرارگیری لیست اهداف در بخش بالا و تنظیم رنگ متناسب با تم تیره و روشن
             for _, row in goals_df.iterrows():
-                col_ginfo, col_gprog, col_gdel = st.columns([0.5, 0.4, 0.1])
+                col_ginfo, col_gprog, col_gedit, col_gdel = st.columns([0.48, 0.36, 0.08, 0.08])
                 with col_ginfo:
                     try:
                         g_dt = datetime.strptime(str(row['target_date']), "%Y-%m-%d").date()
@@ -407,16 +434,65 @@ with tab_goals:
                     if new_prog != int(row["progress"]):
                         update_goal_progress(row["id"], new_prog)
                         st.rerun()
+                with col_gedit:
+                    if st.button("✏️", key=f"edit_btn_goal_{row['id']}"):
+                        st.session_state[f"editing_goal_{row['id']}"] = not st.session_state.get(f"editing_goal_{row['id']}", False)
+                        st.rerun()
                 with col_gdel:
                     if st.button("🗑️", key=f"del_goal_{row['id']}"):
                         delete_goal(row["id"])
                         st.rerun()
+
+                # بخش ویرایش در صورت کلیک روی دکمه مداد
+                if st.session_state.get(f"editing_goal_{row['id']}", False):
+                    with st.container():
+                        st.info("ویرایش اطلاعات هدف:")
+                        try:
+                            cur_dt = datetime.strptime(str(row['target_date']), "%Y-%m-%d").date()
+                        except Exception:
+                            cur_dt = date.today()
+                        edit_target_date = jalali_date_picker("ویرایش ددلاین / تاریخ هدف:", default_date=cur_dt, key=f"edit_gdate_{row['id']}")
+
+                        with st.form(f"form_edit_goal_{row['id']}"):
+                            eg_title = st.text_input("عنوان:", value=row['title'])
+                            goal_types = ["کوتاه‌مدت (هفتگی/ماهانه)", "بلندمدت (فصلی/سالانه)"]
+                            eg_type = st.selectbox("نوع هدف:", goal_types, index=goal_types.index(row['goal_type']) if row['goal_type'] in goal_types else 0)
+                            
+                            goal_cats = [
+                                "💼 کسب‌وکار و مالی",
+                                "🎯 ترید و سرمایه‌گذاری",
+                                "📚 مهارت و یادگیری",
+                                "❤️ روابط و خانواده",
+                                "🏋️ سلامت و ورزش",
+                                "👤 شخصی",
+                            ]
+                            eg_cat = st.selectbox("دسته‌بندی:", goal_cats, index=goal_cats.index(row['category']) if row['category'] in goal_cats else 0)
+                            eg_prog = st.slider("درصد پیشرفت:", 0, 100, int(row['progress']), step=5)
+
+                            col_esave, col_ecancel = st.columns(2)
+                            with col_esave:
+                                if st.form_submit_button("💾 ذخیره تغییرات", use_container_width=True):
+                                    if eg_title.strip():
+                                        update_goal_full(row['id'], eg_title.strip(), eg_cat, eg_type, str(edit_target_date), eg_prog)
+                                        st.session_state[f"editing_goal_{row['id']}"] = False
+                                        st.success("تغییرات ذخیره شد.")
+                                        st.rerun()
+                                    else:
+                                        st.error("عنوان نمی‌تواند خالی باشد.")
+                            with col_ecancel:
+                                if st.form_submit_button("انصراف", use_container_width=True):
+                                    st.session_state[f"editing_goal_{row['id']}"] = False
+                                    st.rerun()
+
                 st.markdown("<hr style='margin: 4px 0; border: none; border-top: 1px solid rgba(148, 163, 184, 0.2);' />", unsafe_allow_html=True)
 
-            st.write("")
-            st.markdown("##### 📊 وضعیت و پیشرفت اهداف")
-            
-            # ۲. قرارگیری نمودار پیشرفت اهداف در پایین لیست
+    # قرارگیری نمودار پیشرفت اهداف در وسط صفحه و زیر بخش لیست اهداف
+    if not goals_df.empty:
+        st.write("")
+        st.markdown("<hr style='margin: 20px 0; border: none; border-top: 1px solid rgba(148, 163, 184, 0.2);' />", unsafe_allow_html=True)
+        col_c_left, col_c_mid, col_c_right = st.columns([1, 4, 1])
+        with col_c_mid:
+            st.markdown("<h5 style='text-align: center;'>📊 وضعیت و پیشرفت اهداف</h5>", unsafe_allow_html=True)
             fig_goals = px.bar(
                 goals_df,
                 x="progress",
@@ -532,7 +608,7 @@ with tab_plan:
 
             for _, row in p_df.iterrows():
                 done = str(row.get("status", "")) == "done"
-                c_chk, c_txt, c_del = st.columns([0.1, 0.8, 0.1])
+                c_chk, c_txt, c_edit, c_del = st.columns([0.1, 0.74, 0.08, 0.08])
                 with c_chk:
                     checked = st.checkbox("", value=done, key=f"p_chk_{row['id']}")
                     if checked != done:
@@ -550,10 +626,75 @@ with tab_plan:
                         """,
                         unsafe_allow_html=True,
                     )
+                with c_edit:
+                    if st.button("✏️", key=f"p_edit_btn_{row['id']}"):
+                        st.session_state[f"editing_task_{row['id']}"] = not st.session_state.get(f"editing_task_{row['id']}", False)
+                        st.rerun()
                 with c_del:
                     if st.button("🗑️", key=f"p_del_{row['id']}"):
                         delete_planned_task(row["id"])
                         st.rerun()
+
+                # بخش فرم ویرایش تسک برنامه‌ریزی
+                if st.session_state.get(f"editing_task_{row['id']}", False):
+                    with st.container():
+                        st.info("ویرایش تسک برنامه‌ریزی:")
+                        with st.form(f"form_edit_task_{row['id']}"):
+                            ep_title = st.text_input("عنوان تسک:", value=row['title'])
+                            cats_plan = [
+                                "💼 کاری و تجاری",
+                                "🎯 ترید و بازارهای مالی",
+                                "📚 مطالعه و یادگیری",
+                                "❤️ روابط و خانواده",
+                                "💇‍♂️ استایل و رسیدگی فردی",
+                                "🎯 اهداف بلندمدت",
+                                "👤 شخصی",
+                                "🏋️ ورزش و سلامت",
+                                "🛌 استراحت و خواب",
+                            ]
+                            ep_cat = st.selectbox("دسته‌بندی:", cats_plan, index=cats_plan.index(row['category']) if row['category'] in cats_plan else 0)
+                            prios_plan = ["🔴 فوری / حیاتی", "🟡 بااهمیت", "🟢 عادی"]
+                            ep_prio = st.selectbox("اولویت:", prios_plan, index=prios_plan.index(row['priority']) if row['priority'] in prios_plan else 0)
+
+                            try:
+                                def_s = datetime.strptime(row['start_time'], "%H:%M").time()
+                                def_e = datetime.strptime(row['end_time'], "%H:%M").time()
+                            except Exception:
+                                def_s, def_e = time(9, 0), time(10, 0)
+
+                            col_es, col_ee = st.columns(2)
+                            with col_es:
+                                ep_s_time = st.time_input("از ساعت:", value=def_s, key=f"ep_s_{row['id']}")
+                            with col_ee:
+                                ep_e_time = st.time_input("تا ساعت:", value=def_e, key=f"ep_e_{row['id']}")
+
+                            new_dur = calc_duration_minutes(ep_s_time, ep_e_time)
+
+                            col_tsave, col_tcancel = st.columns(2)
+                            with col_tsave:
+                                if st.form_submit_button("💾 ذخیره تغییرات", use_container_width=True):
+                                    if ep_title.strip() and new_dur > 0:
+                                        update_planned_task_full(
+                                            row['id'],
+                                            ep_title.strip(),
+                                            ep_cat,
+                                            ep_prio,
+                                            new_dur,
+                                            ep_s_time.strftime("%H:%M"),
+                                            ep_e_time.strftime("%H:%M"),
+                                        )
+                                        st.session_state[f"editing_task_{row['id']}"] = False
+                                        st.success("تسک به‌روزرسانی شد.")
+                                        st.rerun()
+                                    elif new_dur <= 0:
+                                        st.error("ساعت پایان باید بعد از ساعت شروع باشد.")
+                                    else:
+                                        st.error("عنوان تسک نمی‌تواند خالی باشد.")
+                            with col_tcancel:
+                                if st.form_submit_button("انصراف", use_container_width=True):
+                                    st.session_state[f"editing_task_{row['id']}"] = False
+                                    st.rerun()
+
                 st.markdown("<hr style='margin: 6px 0; border: none; border-top: 1px solid rgba(148, 163, 184, 0.2);' />", unsafe_allow_html=True)
 
     with col_chart_plan:
@@ -926,7 +1067,6 @@ with tab_analytics:
 
         st.markdown("##### 📅 روند تفکیک روزانه (ساعت)")
         
-        # تبدیل تاریخ‌های ستون لاگ به شمسی جهت نمایش در محور نمودار
         analytics_df_plot = analytics_df.copy()
         def to_jalali_str(g_str):
             try:
