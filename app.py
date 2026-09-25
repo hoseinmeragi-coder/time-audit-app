@@ -229,7 +229,7 @@ def update_goal_progress(goal_id, progress):
     if not df.empty:
         idx = df[df["id"] == str(goal_id)].index
         if not idx.empty:
-            df.loc[idx, "progress"] = int(progress)
+            df.loc[idx, "progress"] = str(int(progress))
             df.loc[idx, "status"] = "completed" if int(progress) >= 100 else "active"
             save_sheet_df("goals", df)
 
@@ -239,11 +239,11 @@ def update_goal_full(goal_id, title, category, goal_type, target_date, progress)
     if not df.empty:
         idx = df[df["id"] == str(goal_id)].index
         if not idx.empty:
-            df.loc[idx, "title"] = title
-            df.loc[idx, "category"] = category
-            df.loc[idx, "goal_type"] = goal_type
+            df.loc[idx, "title"] = str(title)
+            df.loc[idx, "category"] = str(category)
+            df.loc[idx, "goal_type"] = str(goal_type)
             df.loc[idx, "target_date"] = str(target_date)
-            df.loc[idx, "progress"] = int(progress)
+            df.loc[idx, "progress"] = str(int(progress))
             df.loc[idx, "status"] = "completed" if int(progress) >= 100 else "active"
             save_sheet_df("goals", df)
 
@@ -293,7 +293,7 @@ def update_task_status(task_id, new_status):
     if not df.empty:
         idx = df[df["id"] == str(task_id)].index
         if not idx.empty:
-            df.loc[idx, "status"] = new_status
+            df.loc[idx, "status"] = str(new_status)
             save_sheet_df("planned_tasks", df)
 
 
@@ -302,10 +302,10 @@ def update_planned_task_full(task_id, title, category, priority, est_minutes, st
     if not df.empty:
         idx = df[df["id"] == str(task_id)].index
         if not idx.empty:
-            df.loc[idx, "title"] = title
-            df.loc[idx, "category"] = category
-            df.loc[idx, "priority"] = priority
-            df.loc[idx, "est_minutes"] = int(est_minutes)
+            df.loc[idx, "title"] = str(title)
+            df.loc[idx, "category"] = str(category)
+            df.loc[idx, "priority"] = str(priority)
+            df.loc[idx, "est_minutes"] = str(int(est_minutes))
             df.loc[idx, "start_time"] = str(start_time)
             df.loc[idx, "end_time"] = str(end_time)
             save_sheet_df("planned_tasks", df)
