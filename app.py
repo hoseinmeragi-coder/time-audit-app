@@ -406,7 +406,7 @@ with tab_goals:
             st.info("هنوز هدفی ثبت نشده است. از فرم سمت راست اولین هدف خود را ایجاد کنید.")
         else:
             for _, row in goals_df.iterrows():
-                col_ginfo, col_gprog, col_gedit, col_gdel = st.columns([0.48, 0.36, 0.08, 0.08])
+                col_ginfo, col_gprog, col_gedit, col_gdel = st.columns([0.44, 0.32, 0.12, 0.12])
                 with col_ginfo:
                     try:
                         g_dt = datetime.strptime(str(row['target_date']), "%Y-%m-%d").date()
@@ -435,15 +435,15 @@ with tab_goals:
                         update_goal_progress(row["id"], new_prog)
                         st.rerun()
                 with col_gedit:
-                    if st.button("✏️", key=f"edit_btn_goal_{row['id']}"):
+                    if st.button("✏️ ویرایش", key=f"edit_btn_goal_{row['id']}", use_container_width=True):
                         st.session_state[f"editing_goal_{row['id']}"] = not st.session_state.get(f"editing_goal_{row['id']}", False)
                         st.rerun()
                 with col_gdel:
-                    if st.button("🗑️", key=f"del_goal_{row['id']}"):
+                    if st.button("🗑️ حذف", key=f"del_goal_{row['id']}", use_container_width=True):
                         delete_goal(row["id"])
                         st.rerun()
 
-                # بخش ویرایش در صورت کلیک روی دکمه مداد
+                # بخش ویرایش در صورت کلیک روی دکمه ویرایش
                 if st.session_state.get(f"editing_goal_{row['id']}", False):
                     with st.container():
                         st.info("ویرایش اطلاعات هدف:")
@@ -486,13 +486,17 @@ with tab_goals:
 
                 st.markdown("<hr style='margin: 4px 0; border: none; border-top: 1px solid rgba(148, 163, 184, 0.2);' />", unsafe_allow_html=True)
 
-    # قرارگیری نمودار پیشرفت اهداف در وسط صفحه و زیر بخش لیست اهداف
+    # قرارگیری نمودار پیشرفت اهداف در وسط صفحه و رفع بریدگی عناوین
     if not goals_df.empty:
         st.write("")
         st.markdown("<hr style='margin: 20px 0; border: none; border-top: 1px solid rgba(148, 163, 184, 0.2);' />", unsafe_allow_html=True)
-        col_c_left, col_c_mid, col_c_right = st.columns([1, 4, 1])
+        col_c_left, col_c_mid, col_c_right = st.columns([1, 6, 1])
         with col_c_mid:
             st.markdown("<h5 style='text-align: center;'>📊 وضعیت و پیشرفت اهداف</h5>", unsafe_allow_html=True)
+            
+            # محاسبه ارتفاع متناسب با تعداد اهداف برای جلوگیری از روی هم افتادن متن‌ها
+            calc_height = max(350, len(goals_df) * 38)
+            
             fig_goals = px.bar(
                 goals_df,
                 x="progress",
@@ -500,15 +504,16 @@ with tab_goals:
                 orientation="h",
                 color="category",
                 range_x=[0, 100],
-                labels={"progress": "درصد پیشرفت (%)", "title": "عنوان هدف"},
+                labels={"progress": "درصد پیشرفت (%)", "title": ""},
             )
             fig_goals.update_layout(
-                font=dict(family="Vazirmatn"),
+                font=dict(family="Vazirmatn", size=13),
                 paper_bgcolor="rgba(0,0,0,0)",
                 plot_bgcolor="rgba(0,0,0,0)",
+                height=calc_height,
                 xaxis=dict(showgrid=True, gridcolor="rgba(148, 163, 184, 0.2)"),
-                yaxis=dict(showgrid=False),
-                margin=dict(t=10, b=10, l=10, r=10),
+                yaxis=dict(showgrid=False, automargin=True),
+                margin=dict(t=20, b=20, l=220, r=20),
             )
             st.plotly_chart(fig_goals, use_container_width=True)
 
@@ -608,7 +613,8 @@ with tab_plan:
 
             for _, row in p_df.iterrows():
                 done = str(row.get("status", "")) == "done"
-                c_chk, c_txt, c_edit, c_del = st.columns([0.1, 0.74, 0.08, 0.08])
+                # تنظیم عرض ستون‌ها و افزودن متن به دکمه‌ها جهت نمایش کامل در تم روشن و تیره
+                c_chk, c_txt, c_edit, c_del = st.columns([0.08, 0.62, 0.15, 0.15])
                 with c_chk:
                     checked = st.checkbox("", value=done, key=f"p_chk_{row['id']}")
                     if checked != done:
@@ -627,11 +633,11 @@ with tab_plan:
                         unsafe_allow_html=True,
                     )
                 with c_edit:
-                    if st.button("✏️", key=f"p_edit_btn_{row['id']}"):
+                    if st.button("✏️ ویرایش", key=f"p_edit_btn_{row['id']}", use_container_width=True):
                         st.session_state[f"editing_task_{row['id']}"] = not st.session_state.get(f"editing_task_{row['id']}", False)
                         st.rerun()
                 with c_del:
-                    if st.button("🗑️", key=f"p_del_{row['id']}"):
+                    if st.button("🗑️ حذف", key=f"p_del_{row['id']}", use_container_width=True):
                         delete_planned_task(row["id"])
                         st.rerun()
 
@@ -877,7 +883,7 @@ with tab_log:
                     if row["activity_type"] == "کار مفید"
                     else ("badge-waste" if row["activity_type"] == "اتلاف وقت" else "badge-routine")
                 )
-                c_info, c_del = st.columns([0.9, 0.1])
+                c_info, c_del = st.columns([0.85, 0.15])
                 with c_info:
                     notes_txt = f" - <span style='color: #F87171;'>{row['notes']}</span>" if row.get("notes") else ""
                     h, m = divmod(row["duration_minutes"], 60)
@@ -896,7 +902,7 @@ with tab_log:
                         unsafe_allow_html=True,
                     )
                 with c_del:
-                    if st.button("🗑️", key=f"a_del_{row['id']}"):
+                    if st.button("🗑️ حذف", key=f"a_del_{row['id']}", use_container_width=True):
                         delete_actual_log(row["id"])
                         st.rerun()
                 st.markdown("<hr style='margin: 6px 0; border: none; border-top: 1px solid rgba(148, 163, 184, 0.2);' />", unsafe_allow_html=True)
