@@ -16,7 +16,7 @@ st.set_page_config(
     page_title="مدیریت، اهداف و عارضه‌یابی زمان (ابری)",
     page_icon="🧭",
     layout="wide",
-    initial_sidebar_state="collapsed",
+    initial_sidebar_state="expanded",  # نوار کناری از ابتدا باز باشد تا تقویم دیده شود
 )
 
 st.markdown(
@@ -67,6 +67,13 @@ st.markdown(
     .badge-productive { background-color: rgba(16, 185, 129, 0.15); color: #34D399; padding: 3px 8px; border-radius: 6px; font-weight: 600; }
     .badge-waste { background-color: rgba(239, 68, 68, 0.15); color: #F87171; padding: 3px 8px; border-radius: 6px; font-weight: 600; }
     .badge-routine { background-color: rgba(148, 163, 184, 0.15); color: #CBD5E1; padding: 3px 8px; border-radius: 6px; font-weight: 600; }
+    
+    /* استایل دکمه‌های تقویم سایدبار */
+    section[data-testid="stSidebar"] div.stButton > button {
+        padding: 4px 2px !important;
+        font-size: 0.82rem !important;
+        min-height: 34px !important;
+    }
     </style>
     """,
     unsafe_allow_html=True,
@@ -359,7 +366,127 @@ def calc_duration_minutes(s_time: time, e_time: time):
 
 
 # ==========================================
-# ۳. رابط کاربری و تب‌های برنامه
+# ۳. کامپوننت تقویم ماهانه شمسی در سایدبار
+# ==========================================
+def render_sidebar_calendar():
+    if "selected_date" not in st.session_state:
+        st.session_state["selected_date"] = date.today()
+        
+    cur_sel_g = st.session_state["selected_date"]
+    cur_sel_j = jdatetime.date.fromgregorian(date=cur_sel_g)
+
+    if "cal_view_year" not in st.session_state:
+        st.session_state["cal_view_year"] = cur_sel_j.year
+        st.session_state["cal_view_month"] = cur_sel_j.month
+
+    v_year = st.session_state["cal_view_year"]
+    v_month = st.session_state["cal_view_month"]
+
+    month_names = [
+        "فروردین", "اردیبهشت", "خرداد", "تیر", "مرداد", "شهریور",
+        "مهر", "آبان", "آذر", "دی", "بهمن", "اسفند"
+    ]
+
+    with st.sidebar:
+        st.markdown("### 📅 تقویم شمسی")
+        
+        c_prev, c_title, c_next = st.columns([1, 2.5, 1])
+        with c_prev:
+            if st.button("◀", key="cal_prev_m", help="ماه قبل", use_container_width=True):
+                if v_month == 1:
+                    st.session_state["cal_view_month"] = 12
+                    st.session_state["cal_view_year"] -= 1
+                else:
+                    st.session_state["cal_view_month"] -= 1
+                st.rerun()
+
+        with c_title:
+            st.markdown(
+                f"<div style='text-align: center; font-weight: bold; font-size: 0.95rem; margin-top: 4px;'>"
+                f"{month_names[v_month - 1]} {v_year}"
+                f"</div>",
+                unsafe_allow_html=True,
+            )
+
+        with c_next:
+            if st.button("▶", key="cal_next_m", help="ماه بعد", use_container_width=True):
+                if v_month == 12:
+                    st.session_state["cal_view_month"] = 1
+                    st.session_state["cal_view_year"] += 1
+                else:
+                    st.session_state["cal_view_month"] += 1
+                st.rerun()
+
+        # سربرگ روزهای هفته
+        weekdays = ["ش", "ی", "د", "س", "چ", "پ", "ج"]
+        h_cols = st.columns(7)
+        for idx, w in enumerate(weekdays):
+            h_cols[idx].markdown(
+                f"<div style='text-align:center; font-size:0.75rem; font-weight:700; color:#94A3B8;'>{w}</div>",
+                unsafe_allow_html=True,
+            )
+
+        first_day_of_month = jdatetime.date(v_year, v_month, 1)
+        start_weekday = first_day_of_month.weekday()
+        days_in_month = 29 if v_month == 12 else (30 if v_month > 6 else 31)
+
+        day_counter = 1
+        current_col = 0
+        r_cols = st.columns(7)
+
+        for _ in range(start_weekday):
+            r_cols[current_col].empty()
+            current_col += 1
+
+        today_j = jdatetime.date.today()
+
+        while day_counter <= days_in_month:
+            j_this_day = jdatetime.date(v_year, v_month, day_counter)
+            g_this_day = j_this_day.togregorian()
+
+            is_selected = (g_this_day == cur_sel_g)
+            btn_type = "primary" if is_selected else "secondary"
+
+            if r_cols[current_col].button(
+                str(day_counter),
+                key=f"sb_day_{v_year}_{v_month}_{day_counter}",
+                type=btn_type,
+                use_container_width=True,
+            ):
+                st.session_state["selected_date"] = g_this_day
+                st.rerun()
+
+            current_col += 1
+            day_counter += 1
+            if current_col == 7 and day_counter <= days_in_month:
+                current_col = 0
+                r_cols = st.columns(7)
+
+        st.markdown(
+            f"<div style='text-align:center; font-size:0.85rem; margin-top:12px; color:#38BDF8;'>"
+            f"روز انتخابی: <b>{cur_sel_j.strftime('%Y/%m/%d')}</b>"
+            f"</div>",
+            unsafe_allow_html=True,
+        )
+
+        if st.button("📍 رفتن به تاریخ امروز", use_container_width=True, key="btn_go_today"):
+            st.session_state["selected_date"] = date.today()
+            t_j = jdatetime.date.today()
+            st.session_state["cal_view_year"] = t_j.year
+            st.session_state["cal_view_month"] = t_j.month
+            st.rerun()
+
+        st.markdown("---")
+
+
+# فراخوانی تقویم شمسی در سایدبار
+render_sidebar_calendar()
+active_date = st.session_state.get("selected_date", date.today())
+active_jdate_str = str(jdatetime.date.fromgregorian(date=active_date))
+
+
+# ==========================================
+# ۴. رابط کاربری و تب‌های برنامه
 # ==========================================
 tab_goals, tab_plan, tab_log, tab_analytics = st.tabs(
     [
@@ -381,7 +508,12 @@ with tab_goals:
 
     with col_gform:
         st.markdown("##### ➕ تعریف هدف یا پروژه جدید")
-        g_target_date = jalali_date_picker("ددلاین / تاریخ هدف:", default_date=date.today() + timedelta(days=14), key="goal_date_pick")
+        # پیش‌فرض ددلاین بر اساس تاریخ انتخاب شده در تقویم کنار دست شما تنظیم می‌شود
+        g_target_date = jalali_date_picker(
+            "ددلاین / تاریخ هدف (هماهنگ با تقویم):",
+            default_date=active_date,
+            key="goal_date_pick",
+        )
         with st.form("new_goal_form", clear_on_submit=True):
             g_title = st.text_input("عنوان هدف / پروژه:", placeholder="مثال: استخدام دستیار، تسلط بر ستاپ‌های معاملاتی")
             g_type = st.selectbox("نوع هدف:", ["کوتاه‌مدت (هفتگی/ماهانه)", "بلندمدت (فصلی/سالانه)"])
@@ -485,7 +617,6 @@ with tab_goals:
 
                 st.markdown("<hr style='margin: 4px 0; border: none; border-top: 1px solid rgba(148, 163, 184, 0.2);' />", unsafe_allow_html=True)
 
-    # قرارگیری نمودار پیشرفت اهداف در وسط صفحه و رفع بریدگی عناوین
     if not goals_df.empty:
         st.write("")
         st.markdown("<hr style='margin: 20px 0; border: none; border-top: 1px solid rgba(148, 163, 184, 0.2);' />", unsafe_allow_html=True)
@@ -522,7 +653,8 @@ with tab_plan:
 
     col_view, _ = st.columns([1.5, 2.5])
     with col_view:
-        plan_date = jalali_date_picker("انتخاب تاریخ برای برنامه‌ریزی:", default_date=date.today(), key="plan_date_pick")
+        # انتخاب تاریخ مستقیم از تقویم سایدبار است اما در صورت تمایل با ویجت زیر هم قابل تنظیم است
+        plan_date = jalali_date_picker("تاریخ در حال برنامه‌ریزی (هماهنگ با تقویم کناری):", default_date=active_date, key="plan_date_pick")
 
     p_df = get_planned_tasks(plan_date)
     plan_total_min = p_df["est_minutes"].sum() if not p_df.empty else 0
@@ -637,7 +769,7 @@ with tab_plan:
                         delete_planned_task(row["id"])
                         st.rerun()
 
-                # بخش فرم ویرایش تسک برنامه‌ریزی
+                # ویرایش تسک برنامه‌ریزی
                 if st.session_state.get(f"editing_task_{row['id']}", False):
                     with st.container():
                         st.info("ویرایش تسک برنامه‌ریزی:")
@@ -748,7 +880,7 @@ with tab_log:
 
     col_audit_date, _ = st.columns([1.5, 2.5])
     with col_audit_date:
-        audit_date = jalali_date_picker("تاریخ ثبت وقایع:", default_date=date.today(), key="audit_date_pick")
+        audit_date = jalali_date_picker("تاریخ ثبت وقایع (هماهنگ با تقویم کناری):", default_date=active_date, key="audit_date_pick")
 
     a_df = get_actual_logs(audit_date)
     total_act_min = a_df["duration_minutes"].sum() if not a_df.empty else 0
