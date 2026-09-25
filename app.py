@@ -144,15 +144,20 @@ def get_worksheet(sheet_name):
         return sh.add_worksheet(title=sheet_name, rows=100, cols=20)
 
 
-@st.cache_data(ttl=60)
 def load_sheet_df(sheet_name):
     try:
         ws = get_worksheet(sheet_name)
         vals = ws.get_all_values()
         if not vals or len(vals) < 2:
             return pd.DataFrame()
-        return pd.DataFrame(vals[1:], columns=vals[0])
-    except Exception:
+        # پاک‌سازی نام ستون‌ها از فاصله‌های احتمالی
+        headers = [str(c).strip() for c in vals[0]]
+        df = pd.DataFrame(vals[1:], columns=headers)
+        # حذف سطرهای کاملاً خالی
+        df = df[df.apply(lambda row: "".join(row.values.astype(str)).strip() != "", axis=1)]
+        return df
+    except Exception as e:
+        st.error(f"خطا در خواندن داده‌ها: {e}")
         return pd.DataFrame()
 
 
@@ -163,7 +168,6 @@ def save_sheet_df(sheet_name, df):
         all_data = [df_clean.columns.tolist()] + df_clean.values.tolist()
         ws.clear()
         ws.update(range_name="A1", values=all_data)
-        st.cache_data.clear()
     except Exception as e:
         st.error(f"خطا در همگام‌سازی ابری: {e}")
 
@@ -204,7 +208,7 @@ def update_goal_progress(goal_id, progress):
         idx = df[df["id"] == str(goal_id)].index
         if not idx.empty:
             df.loc[idx, "progress"] = int(progress)
-            df.loc[idx, "status"] = "completed" if progress >= 100 else "active"
+            df.loc[idx, "status"] = "completed" if int(progress) >= 100 else "active"
             save_sheet_df("goals", df)
 
 
@@ -422,18 +426,8 @@ with tab_goals:
                         unsafe_allow_html=True,
                     )
                 with col_gprog:
-                    new_prog = st.slider(
-                        "پیشرفت (%)",
-                        0,
-                        100,
-                        int(row["progress"]),
-                        step=5,
-                        key=f"slide_goal_{row['id']}",
-                        label_visibility="collapsed",
-                    )
-                    if new_prog != int(row["progress"]):
-                        update_goal_progress(row["id"], new_prog)
-                        st.rerun()
+                    st.markdown(f"<div style='font-size: 0.88rem; font-weight: 600;'>پیشرفت: {row['progress']}٪</div>", unsafe_allow_html=True)
+                    st.progress(int(row["progress"]) / 100)
                 with col_gedit:
                     if st.button("✏️ ویرایش", key=f"edit_btn_goal_{row['id']}", use_container_width=True):
                         st.session_state[f"editing_goal_{row['id']}"] = not st.session_state.get(f"editing_goal_{row['id']}", False)
@@ -494,7 +488,6 @@ with tab_goals:
         with col_c_mid:
             st.markdown("<h5 style='text-align: center;'>📊 وضعیت و پیشرفت اهداف</h5>", unsafe_allow_html=True)
             
-            # محاسبه ارتفاع متناسب با تعداد اهداف برای جلوگیری از روی هم افتادن متن‌ها
             calc_height = max(350, len(goals_df) * 38)
             
             fig_goals = px.bar(
@@ -613,7 +606,6 @@ with tab_plan:
 
             for _, row in p_df.iterrows():
                 done = str(row.get("status", "")) == "done"
-                # تنظیم عرض ستون‌ها و افزودن متن به دکمه‌ها جهت نمایش کامل در تم روشن و تیره
                 c_chk, c_txt, c_edit, c_del = st.columns([0.08, 0.62, 0.15, 0.15])
                 with c_chk:
                     checked = st.checkbox("", value=done, key=f"p_chk_{row['id']}")
