@@ -675,8 +675,104 @@ with tab_plan:
         plan_date = jalali_date_picker("تاریخ در حال برنامه‌ریزی (هماهنگ با تقویم):", default_date=active_date, key="plan_date_pick")
 
     p_df = get_planned_tasks(plan_date)
+
+    # مرتب‌سازی برنامه‌ها طبق ساعت شروع
+    if not p_df.empty and "start_time" in p_df.columns:
+        p_df = p_df.sort_values(by="start_time").reset_index(drop=True)
+
     plan_total_min = p_df["est_minutes"].sum() if not p_df.empty else 0
     plan_remaining_min = max(0, 1440 - plan_total_min)
+
+    # --- ویجت خط زمان ۲۴ ساعته: نمایش دقیق ساعت‌های پر و ساعت‌های خالی ---
+    if not p_df.empty:
+        base_d = date.today()
+        timeline_segments = []
+        parsed_tasks = []
+
+        for _, r in p_df.iterrows():
+            try:
+                st_time = datetime.strptime(str(r["start_time"]).strip(), "%H:%M").time()
+                en_time = datetime.strptime(str(r["end_time"]).strip(), "%H:%M").time()
+                t_s = datetime.combine(base_d, st_time)
+                t_e = datetime.combine(base_d, en_time)
+                if t_e <= t_s:
+                    t_e += timedelta(days=1)
+                parsed_tasks.append({
+                    "start": t_s,
+                    "end": t_e,
+                    "title": r["title"],
+                    "category": r["category"],
+                    "time_str": f"{r['start_time']} تا {r['end_time']}"
+                })
+            except Exception:
+                continue
+
+        parsed_tasks = sorted(parsed_tasks, key=lambda x: x["start"])
+
+        day_start = datetime.combine(base_d, time(0, 0))
+        day_end = day_start + timedelta(days=1)
+        cur_cursor = day_start
+
+        for item in parsed_tasks:
+            # زمان‌های خالی قبل از تسک
+            if item["start"] > cur_cursor:
+                timeline_segments.append({
+                    "Task": "🟩 زمان آزاد / خالی",
+                    "Start": cur_cursor,
+                    "End": item["start"],
+                    "Status": "زمان آزاد (خالی)",
+                    "Detail": f"آزاد: {cur_cursor.strftime('%H:%M')} تا {item['start'].strftime('%H:%M')}"
+                })
+            # بازه پرشده با تسک
+            timeline_segments.append({
+                "Task": item["title"],
+                "Start": max(item["start"], cur_cursor),
+                "End": item["end"],
+                "Status": item["category"],
+                "Detail": f"برنامه‌ریزی: {item['time_str']}"
+            })
+            cur_cursor = max(cur_cursor, item["end"])
+
+        # زمان آزاد تا انتهای ۲۴ ساعت
+        if cur_cursor < day_end:
+            timeline_segments.append({
+                "Task": "🟩 زمان آزاد / خالی",
+                "Start": cur_cursor,
+                "End": day_end,
+                "Status": "زمان آزاد (خالی)",
+                "Detail": f"آزاد: {cur_cursor.strftime('%H:%M')} تا 24:00"
+            })
+
+        tl_df = pd.DataFrame(timeline_segments)
+        if not tl_df.empty:
+            color_map = {"زمان آزاد (خالی)": "#1E293B"}
+            fig_timeline = px.timeline(
+                tl_df,
+                x_start="Start",
+                x_end="End",
+                y=["برنامه ۲۴ ساعته"] * len(tl_df),
+                color="Status",
+                hover_data={"Detail": True, "Start": False, "End": False, "Task": True},
+                color_discrete_map=color_map
+            )
+            fig_timeline.update_yaxes(visible=False, showticklabels=False)
+            fig_timeline.update_xaxes(
+                range=[day_start, day_end],
+                dtick=7200000,  # هر دو ساعت یک نشانه
+                tickformat="%H:%M",
+                showgrid=True,
+                gridcolor="rgba(148, 163, 184, 0.2)"
+            )
+            fig_timeline.update_layout(
+                font=dict(family="Vazirmatn", size=12),
+                paper_bgcolor="rgba(0,0,0,0)",
+                plot_bgcolor="rgba(0,0,0,0)",
+                height=130,
+                margin=dict(t=5, b=25, l=10, r=10),
+                showlegend=False
+            )
+            st.markdown("##### 🧭 نوار بصری ۲۴ ساعته روز (شناسایی سریع ساعت‌های پر و آزاد)")
+            st.plotly_chart(fig_timeline, use_container_width=True)
 
     col_form, col_list, col_chart_plan = st.columns([1.1, 1.3, 1.2], gap="medium")
 
@@ -748,7 +844,7 @@ with tab_plan:
 
     with col_list:
         j_plan_date_str = str(jdatetime.date.fromgregorian(date=plan_date))
-        st.markdown(f"##### 📋 برنامه‌ریزی روز {j_plan_date_str}")
+        st.markdown(f"##### 📋 برنامه‌ریزی روز {j_plan_date_str} (به ترتیب ساعت)")
 
         if p_df.empty:
             st.info("برای این روز هنوز برنامه‌ای تعریف نشده است.")
