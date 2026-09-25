@@ -16,7 +16,7 @@ st.set_page_config(
     page_title="مدیریت، اهداف و عارضه‌یابی زمان (ابری)",
     page_icon="🧭",
     layout="wide",
-    initial_sidebar_state="expanded",
+    initial_sidebar_state="collapsed",
 )
 
 st.markdown(
@@ -68,20 +68,20 @@ st.markdown(
     .badge-waste { background-color: rgba(239, 68, 68, 0.15); color: #F87171; padding: 3px 8px; border-radius: 6px; font-weight: 600; }
     .badge-routine { background-color: rgba(148, 163, 184, 0.15); color: #CBD5E1; padding: 3px 8px; border-radius: 6px; font-weight: 600; }
 
-    /* ممانعت از ستونی شدن ردیف دکمه‌های تقویم در گوشی */
-    section[data-testid="stSidebar"] div[data-testid="stHorizontalBlock"] {
+    /* استایل دکمه‌های ماتریس تقویم */
+    div[data-testid="stDialog"] div[data-testid="stHorizontalBlock"] {
         flex-direction: row !important;
         flex-wrap: nowrap !important;
         gap: 4px !important;
     }
-    section[data-testid="stSidebar"] div[data-testid="stHorizontalBlock"] > div {
+    div[data-testid="stDialog"] div[data-testid="stHorizontalBlock"] > div {
         min-width: 0 !important;
         flex: 1 1 0 !important;
     }
-    section[data-testid="stSidebar"] div.stButton > button {
-        padding: 4px 0px !important;
-        font-size: 0.80rem !important;
-        min-height: 32px !important;
+    div[data-testid="stDialog"] div.stButton > button {
+        padding: 6px 0px !important;
+        font-size: 0.85rem !important;
+        min-height: 36px !important;
         width: 100% !important;
     }
     </style>
@@ -376,12 +376,13 @@ def calc_duration_minutes(s_time: time, e_time: time):
 
 
 # ==========================================
-# ۳. کامپوننت تقویم هوشمند و واکنش‌گرا (موبایل و دسکتاپ)
+# ۳. کامپوننت پاپ‌آپ و تمام‌صفحه تقویم شمسی
 # ==========================================
-def render_sidebar_calendar():
-    if "selected_date" not in st.session_state:
-        st.session_state["selected_date"] = date.today()
+if "selected_date" not in st.session_state:
+    st.session_state["selected_date"] = date.today()
 
+@st.dialog("📅 تقویم شمسی و انتخاب روز")
+def open_calendar_dialog():
     cur_sel_g = st.session_state["selected_date"]
     cur_sel_j = jdatetime.date.fromgregorian(date=cur_sel_g)
 
@@ -390,116 +391,120 @@ def render_sidebar_calendar():
         "مهر", "آبان", "آذر", "دی", "بهمن", "اسفند"
     ]
 
-    with st.sidebar:
-        st.markdown("### 📅 تقویم شمسی")
-
-        # کارت وضعیت تاریخ فعلی به همراه دکمه‌های جابه‌جایی روزانه (روز قبل / روز بعد)
-        c_p_day, c_curr_info, c_n_day = st.columns([1, 3.2, 1])
-        with c_p_day:
-            if st.button("‹", key="prev_day_btn", help="روز قبل", use_container_width=True):
-                st.session_state["selected_date"] = cur_sel_g - timedelta(days=1)
-                st.rerun()
-        with c_curr_info:
-            st.markdown(
-                f"""
-                <div style="background: rgba(56, 189, 248, 0.1); border: 1px solid rgba(56, 189, 248, 0.3); border-radius: 8px; padding: 4px; text-align: center;">
-                    <div style="font-weight: 700; font-size: 0.95rem; color: #38BDF8;">{cur_sel_j.strftime('%A')}</div>
-                    <div style="font-size: 0.85rem; font-weight: 600;">{cur_sel_j.strftime('%Y/%m/%d')}</div>
-                </div>
-                """,
-                unsafe_allow_html=True,
-            )
-        with c_n_day:
-            if st.button("›", key="next_day_btn", help="روز بعد", use_container_width=True):
-                st.session_state["selected_date"] = cur_sel_g + timedelta(days=1)
-                st.rerun()
-
-        st.write("")
-
-        # کنترل‌های انتخاب سریع ماه و سال
-        c_m, c_y = st.columns([1.5, 1])
-        with c_m:
-            chosen_m_idx = st.selectbox(
-                "ماه",
-                range(1, 13),
-                index=cur_sel_j.month - 1,
-                format_func=lambda x: month_names[x - 1],
-                key="sb_quick_month",
-                label_visibility="collapsed",
-            )
-        with c_y:
-            years_list = list(range(cur_sel_j.year - 3, cur_sel_j.year + 4))
-            chosen_y = st.selectbox(
-                "سال",
-                years_list,
-                index=years_list.index(cur_sel_j.year) if cur_sel_j.year in years_list else 0,
-                key="sb_quick_year",
-                label_visibility="collapsed",
-            )
-
-        max_days = 29 if chosen_m_idx == 12 else (30 if chosen_m_idx > 6 else 31)
-        safe_day = min(cur_sel_j.day, max_days)
-
-        # اگر ماه یا سال دستی تغییر کرد
-        if chosen_m_idx != cur_sel_j.month or chosen_y != cur_sel_j.year:
-            new_j = jdatetime.date(chosen_y, chosen_m_idx, safe_day)
-            st.session_state["selected_date"] = new_j.togregorian()
+    c_p_day, c_curr_info, c_n_day = st.columns([1, 3.2, 1])
+    with c_p_day:
+        if st.button("‹ روز قبل", key="dlg_prev_day", use_container_width=True):
+            st.session_state["selected_date"] = cur_sel_g - timedelta(days=1)
+            st.rerun()
+    with c_curr_info:
+        st.markdown(
+            f"""
+            <div style="background: rgba(56, 189, 248, 0.12); border: 1px solid rgba(56, 189, 248, 0.4); border-radius: 8px; padding: 6px; text-align: center;">
+                <div style="font-weight: 700; font-size: 1rem; color: #38BDF8;">{cur_sel_j.strftime('%A')}</div>
+                <div style="font-size: 0.9rem; font-weight: 600;">{cur_sel_j.strftime('%Y/%m/%d')}</div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+    with c_n_day:
+        if st.button("روز بعد ›", key="dlg_next_day", use_container_width=True):
+            st.session_state["selected_date"] = cur_sel_g + timedelta(days=1)
             st.rerun()
 
-        # نمای ماتریسی هفتگی ثابت (بدون درهم‌ریختگی در صفحات گوشی)
-        first_day_of_month = jdatetime.date(chosen_y, chosen_m_idx, 1)
-        start_weekday = first_day_of_month.weekday()  # شنبه=0 تا جمعه=6
-        weekdays = ["ش", "ی", "د", "س", "چ", "پ", "ج"]
+    st.write("")
 
-        # سربرگ روزها
-        h_cols = st.columns(7)
-        for idx, w in enumerate(weekdays):
-            h_cols[idx].markdown(
-                f"<div style='text-align:center; font-size:0.75rem; font-weight:700; color:#94A3B8;'>{w}</div>",
-                unsafe_allow_html=True,
-            )
+    c_m, c_y = st.columns([1.5, 1])
+    with c_m:
+        chosen_m_idx = st.selectbox(
+            "ماه",
+            range(1, 13),
+            index=cur_sel_j.month - 1,
+            format_func=lambda x: month_names[x - 1],
+            key="dlg_quick_month",
+        )
+    with c_y:
+        years_list = list(range(cur_sel_j.year - 3, cur_sel_j.year + 4))
+        chosen_y = st.selectbox(
+            "سال",
+            years_list,
+            index=years_list.index(cur_sel_j.year) if cur_sel_j.year in years_list else 0,
+            key="dlg_quick_year",
+        )
 
-        # رسم هفته به هفته تا دکمه‌ها هرگز عمودی نشوند
-        day_counter = 1
-        today_j = jdatetime.date.today()
+    max_days = 29 if chosen_m_idx == 12 else (30 if chosen_m_idx > 6 else 31)
+    safe_day = min(cur_sel_j.day, max_days)
 
-        while day_counter <= max_days:
-            week_cols = st.columns(7)
-            for i in range(7):
-                if day_counter == 1 and i < start_weekday:
-                    week_cols[i].empty()
-                elif day_counter <= max_days:
-                    j_this = jdatetime.date(chosen_y, chosen_m_idx, day_counter)
-                    g_this = j_this.togregorian()
+    if chosen_m_idx != cur_sel_j.month or chosen_y != cur_sel_j.year:
+        new_j = jdatetime.date(chosen_y, chosen_m_idx, safe_day)
+        st.session_state["selected_date"] = new_j.togregorian()
+        st.rerun()
 
-                    is_selected = (g_this == cur_sel_g)
-                    btn_type = "primary" if is_selected else "secondary"
+    first_day_of_month = jdatetime.date(chosen_y, chosen_m_idx, 1)
+    start_weekday = first_day_of_month.weekday()
+    weekdays = ["ش", "ی", "د", "س", "چ", "پ", "ج"]
 
-                    if week_cols[i].button(
-                        str(day_counter),
-                        key=f"cal_btn_{chosen_y}_{chosen_m_idx}_{day_counter}",
-                        type=btn_type,
-                        use_container_width=True,
-                    ):
-                        st.session_state["selected_date"] = g_this
-                        st.rerun()
-                    day_counter += 1
-                else:
-                    week_cols[i].empty()
+    h_cols = st.columns(7)
+    for idx, w in enumerate(weekdays):
+        h_cols[idx].markdown(
+            f"<div style='text-align:center; font-size:0.85rem; font-weight:700; color:#94A3B8;'>{w}</div>",
+            unsafe_allow_html=True,
+        )
 
-        st.write("")
-        if st.button("📍 رفتن به امروز", use_container_width=True, key="btn_go_today"):
+    day_counter = 1
+    while day_counter <= max_days:
+        week_cols = st.columns(7)
+        for i in range(7):
+            if day_counter == 1 and i < start_weekday:
+                week_cols[i].empty()
+            elif day_counter <= max_days:
+                j_this = jdatetime.date(chosen_y, chosen_m_idx, day_counter)
+                g_this = j_this.togregorian()
+
+                is_selected = (g_this == cur_sel_g)
+                btn_type = "primary" if is_selected else "secondary"
+
+                if week_cols[i].button(
+                    str(day_counter),
+                    key=f"dlg_cal_btn_{chosen_y}_{chosen_m_idx}_{day_counter}",
+                    type=btn_type,
+                    use_container_width=True,
+                ):
+                    st.session_state["selected_date"] = g_this
+                    st.rerun()
+                day_counter += 1
+            else:
+                week_cols[i].empty()
+
+    st.write("")
+    col_t, col_close = st.columns(2)
+    with col_t:
+        if st.button("📍 رفتن به امروز", use_container_width=True, key="dlg_go_today"):
             st.session_state["selected_date"] = date.today()
             st.rerun()
+    with col_close:
+        if st.button("❌ بستن تقویم", use_container_width=True, key="dlg_close_btn"):
+            st.rerun()
 
-        st.markdown("---")
 
-
-# فراخوانی تقویم شمسی در سایدبار
-render_sidebar_calendar()
+# نوار ابزار بالای صفحه برای باز کردن تقویم
 active_date = st.session_state.get("selected_date", date.today())
-active_jdate_str = str(jdatetime.date.fromgregorian(date=active_date))
+active_jdate = jdatetime.date.fromgregorian(date=active_date)
 
+top_c1, top_c2 = st.columns([1.3, 3])
+with top_c1:
+    if st.button("📅 باز کردن تقویم کامل شمسی", use_container_width=True, type="primary"):
+        open_calendar_dialog()
+with top_c2:
+    st.markdown(
+        f"""
+        <div style="padding-top: 6px; font-weight: 600; color: #38BDF8;">
+            تاریخ فعال: {active_jdate.strftime('%A')}، {active_jdate.strftime('%Y/%m/%d')}
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+st.write("")
 
 # ==========================================
 # ۴. رابط کاربری و تب‌های برنامه
@@ -667,7 +672,7 @@ with tab_plan:
 
     col_view, _ = st.columns([1.5, 2.5])
     with col_view:
-        plan_date = jalali_date_picker("تاریخ در حال برنامه‌ریزی (هماهنگ با تقویم کناری):", default_date=active_date, key="plan_date_pick")
+        plan_date = jalali_date_picker("تاریخ در حال برنامه‌ریزی (هماهنگ با تقویم):", default_date=active_date, key="plan_date_pick")
 
     p_df = get_planned_tasks(plan_date)
     plan_total_min = p_df["est_minutes"].sum() if not p_df.empty else 0
@@ -892,7 +897,7 @@ with tab_log:
 
     col_audit_date, _ = st.columns([1.5, 2.5])
     with col_audit_date:
-        audit_date = jalali_date_picker("تاریخ ثبت وقایع (هماهنگ با تقویم کناری):", default_date=active_date, key="audit_date_pick")
+        audit_date = jalali_date_picker("تاریخ ثبت وقایع (هماهنگ با تقویم):", default_date=active_date, key="audit_date_pick")
 
     a_df = get_actual_logs(audit_date)
     total_act_min = a_df["duration_minutes"].sum() if not a_df.empty else 0
