@@ -1,5 +1,6 @@
 import datetime
 from datetime import date, datetime, time, timedelta
+import time as time_module
 import gspread
 from google.oauth2.service_account import Credentials
 import jdatetime
@@ -144,21 +145,24 @@ def get_worksheet(sheet_name):
         return sh.add_worksheet(title=sheet_name, rows=100, cols=20)
 
 
+@st.cache_data(ttl=300)
 def load_sheet_df(sheet_name):
-    try:
-        ws = get_worksheet(sheet_name)
-        vals = ws.get_all_values()
-        if not vals or len(vals) < 2:
+    for attempt in range(3):
+        try:
+            ws = get_worksheet(sheet_name)
+            vals = ws.get_all_values()
+            if not vals or len(vals) < 2:
+                return pd.DataFrame()
+            headers = [str(c).strip() for c in vals[0]]
+            df = pd.DataFrame(vals[1:], columns=headers)
+            df = df[df.apply(lambda row: "".join(row.values.astype(str)).strip() != "", axis=1)]
+            return df
+        except Exception as e:
+            if "429" in str(e) and attempt < 2:
+                time_module.sleep(2)
+                continue
             return pd.DataFrame()
-        # پاک‌سازی نام ستون‌ها از فاصله‌های احتمالی
-        headers = [str(c).strip() for c in vals[0]]
-        df = pd.DataFrame(vals[1:], columns=headers)
-        # حذف سطرهای کاملاً خالی
-        df = df[df.apply(lambda row: "".join(row.values.astype(str)).strip() != "", axis=1)]
-        return df
-    except Exception as e:
-        st.error(f"خطا در خواندن داده‌ها: {e}")
-        return pd.DataFrame()
+    return pd.DataFrame()
 
 
 def save_sheet_df(sheet_name, df):
@@ -168,6 +172,7 @@ def save_sheet_df(sheet_name, df):
         all_data = [df_clean.columns.tolist()] + df_clean.values.tolist()
         ws.clear()
         ws.update(range_name="A1", values=all_data)
+        load_sheet_df.clear()
     except Exception as e:
         st.error(f"خطا در همگام‌سازی ابری: {e}")
 
@@ -487,7 +492,6 @@ with tab_goals:
         col_c_left, col_c_mid, col_c_right = st.columns([1, 6, 1])
         with col_c_mid:
             st.markdown("<h5 style='text-align: center;'>📊 وضعیت و پیشرفت اهداف</h5>", unsafe_allow_html=True)
-            
             calc_height = max(350, len(goals_df) * 38)
             
             fig_goals = px.bar(
