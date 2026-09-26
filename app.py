@@ -297,7 +297,7 @@ def update_task_status(task_id, new_status):
             save_sheet_df("planned_tasks", df)
 
 
-def update_planned_task_full(task_id, title, category, priority, est_minutes, start_time, end_time):
+def update_planned_task_full(task_id, title, category, priority, est_minutes, start_time, end_time, task_date):
     df = load_sheet_df("planned_tasks")
     if not df.empty:
         idx = df[df["id"] == str(task_id)].index
@@ -308,6 +308,7 @@ def update_planned_task_full(task_id, title, category, priority, est_minutes, st
             df.loc[idx, "est_minutes"] = str(int(est_minutes))
             df.loc[idx, "start_time"] = str(start_time)
             df.loc[idx, "end_time"] = str(end_time)
+            df.loc[idx, "task_date"] = str(task_date)
             save_sheet_df("planned_tasks", df)
 
 
@@ -886,6 +887,18 @@ with tab_plan:
                 if st.session_state.get(f"editing_task_{row['id']}", False):
                     with st.container():
                         st.info("ویرایش تسک برنامه‌ریزی:")
+                        
+                        try:
+                            cur_tdate = datetime.strptime(str(row.get('task_date', plan_date)), "%Y-%m-%d").date()
+                        except Exception:
+                            cur_tdate = plan_date
+
+                        edit_task_date = jalali_date_picker(
+                            "ویرایش تاریخ انجام تسک:",
+                            default_date=cur_tdate,
+                            key=f"edit_pdate_{row['id']}"
+                        )
+
                         with st.form(f"form_edit_task_{row['id']}"):
                             ep_title = st.text_input("عنوان تسک:", value=row['title'])
                             cats_plan = [
@@ -929,6 +942,7 @@ with tab_plan:
                                             new_dur,
                                             ep_s_time.strftime("%H:%M"),
                                             ep_e_time.strftime("%H:%M"),
+                                            str(edit_task_date),
                                         )
                                         st.session_state[f"editing_task_{row['id']}"] = False
                                         st.success("تسک به‌روزرسانی شد.")
