@@ -229,7 +229,7 @@ def update_goal_progress(goal_id, progress):
     if not df.empty:
         idx = df[df["id"] == str(goal_id)].index
         if not idx.empty:
-            df.loc[idx, "progress"] = str(int(progress))
+            df.loc[idx, "progress"] = int(progress)
             df.loc[idx, "status"] = "completed" if int(progress) >= 100 else "active"
             save_sheet_df("goals", df)
 
@@ -243,7 +243,7 @@ def update_goal_full(goal_id, title, category, goal_type, target_date, progress)
             df.loc[idx, "category"] = str(category)
             df.loc[idx, "goal_type"] = str(goal_type)
             df.loc[idx, "target_date"] = str(target_date)
-            df.loc[idx, "progress"] = str(int(progress))
+            df.loc[idx, "progress"] = int(progress)
             df.loc[idx, "status"] = "completed" if int(progress) >= 100 else "active"
             save_sheet_df("goals", df)
 
