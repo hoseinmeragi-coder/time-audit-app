@@ -1010,8 +1010,105 @@ with tab_log:
         audit_date = jalali_date_picker("تاریخ ثبت وقایع (هماهنگ با تقویم):", default_date=active_date, key="audit_date_pick")
 
     a_df = get_actual_logs(audit_date)
+
+    # مرتب‌سازی رویدادها بر اساس ساعت شروع
+    if not a_df.empty and "start_time" in a_df.columns:
+        a_df = a_df.sort_values(by="start_time").reset_index(drop=True)
+
     total_act_min = a_df["duration_minutes"].sum() if not a_df.empty else 0
     remaining_min = max(0, 1440 - total_act_min)
+
+    # --- ویجت خط زمان ۲۴ ساعته: نمایش دقیق ساعت‌های ثبت‌شده عملکرد و ساعت‌های خالی ---
+    if not a_df.empty:
+        base_d = date.today()
+        timeline_segments_act = []
+        parsed_actuals = []
+
+        for _, r in a_df.iterrows():
+            try:
+                st_time = datetime.strptime(str(r["start_time"]).strip(), "%H:%M").time()
+                en_time = datetime.strptime(str(r["end_time"]).strip(), "%H:%M").time()
+                t_s = datetime.combine(base_d, st_time)
+                t_e = datetime.combine(base_d, en_time)
+                if t_e <= t_s:
+                    t_e += timedelta(days=1)
+                parsed_actuals.append({
+                    "start": t_s,
+                    "end": t_e,
+                    "title": r["title"],
+                    "category": r["category"],
+                    "activity_type": r.get("activity_type", "روتین و ضروری"),
+                    "time_str": f"{r['start_time']} تا {r['end_time']}"
+                })
+            except Exception:
+                continue
+
+        parsed_actuals = sorted(parsed_actuals, key=lambda x: x["start"])
+
+        day_start = datetime.combine(base_d, time(0, 0))
+        day_end = day_start + timedelta(days=1)
+        cur_cursor = day_start
+
+        for item in parsed_actuals:
+            # زمان‌های ثبت‌نشده قبل از این فعالیت
+            if item["start"] > cur_cursor:
+                timeline_segments_act.append({
+                    "Task": "⬜ زمان ثبت‌نشده / خالی",
+                    "Start": cur_cursor,
+                    "End": item["start"],
+                    "Status": "ثبت نشده (خالی)",
+                    "Detail": f"ثبت نشده: {cur_cursor.strftime('%H:%M')} تا {item['start'].strftime('%H:%M')}"
+                })
+            # فعالیت ثبت‌شده
+            timeline_segments_act.append({
+                "Task": item["title"],
+                "Start": max(item["start"], cur_cursor),
+                "End": item["end"],
+                "Status": item["category"],
+                "Detail": f"عملکرد ({item['activity_type']}): {item['time_str']}"
+            })
+            cur_cursor = max(cur_cursor, item["end"])
+
+        # زمان خالی تا پایان ۲۴ ساعت
+        if cur_cursor < day_end:
+            timeline_segments_act.append({
+                "Task": "⬜ زمان ثبت‌نشده / خالی",
+                "Start": cur_cursor,
+                "End": day_end,
+                "Status": "ثبت نشده (خالی)",
+                "Detail": f"ثبت نشده: {cur_cursor.strftime('%H:%M')} تا 24:00"
+            })
+
+        tl_act_df = pd.DataFrame(timeline_segments_act)
+        if not tl_act_df.empty:
+            color_map_act = {"ثبت نشده (خالی)": "#1E293B"}
+            fig_actual_timeline = px.timeline(
+                tl_act_df,
+                x_start="Start",
+                x_end="End",
+                y=["عملکرد ۲۴ ساعته"] * len(tl_act_df),
+                color="Status",
+                hover_data={"Detail": True, "Start": False, "End": False, "Task": True},
+                color_discrete_map=color_map_act
+            )
+            fig_actual_timeline.update_yaxes(visible=False, showticklabels=False)
+            fig_actual_timeline.update_xaxes(
+                range=[day_start, day_end],
+                dtick=7200000,  # هر دو ساعت یک نشانه
+                tickformat="%H:%M",
+                showgrid=True,
+                gridcolor="rgba(148, 163, 184, 0.2)"
+            )
+            fig_actual_timeline.update_layout(
+                font=dict(family="Vazirmatn", size=12),
+                paper_bgcolor="rgba(0,0,0,0)",
+                plot_bgcolor="rgba(0,0,0,0)",
+                height=130,
+                margin=dict(t=5, b=25, l=10, r=10),
+                showlegend=False
+            )
+            st.markdown("##### 🧭 نوار بصری ۲۴ ساعته عملکرد (شناسایی ساعت‌های ثبت‌شده و زمان‌های خالی)")
+            st.plotly_chart(fig_actual_timeline, use_container_width=True)
 
     done_planned_df = get_planned_tasks(audit_date)
     if not done_planned_df.empty:
