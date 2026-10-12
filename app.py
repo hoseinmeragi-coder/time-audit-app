@@ -1,6 +1,8 @@
 import datetime
 from datetime import date, datetime, time, timedelta
 import time as time_module
+import json
+import os
 import gspread
 from google.oauth2.service_account import Credentials
 import jdatetime
@@ -16,7 +18,7 @@ st.set_page_config(
     page_title="مدیریت، اهداف و عارضه‌یابی زمان (ابری)",
     page_icon="🧭",
     layout="wide",
-    initial_sidebar_state="collapsed",
+    initial_sidebar_state="expanded",
 )
 
 st.markdown(
@@ -84,10 +86,45 @@ st.markdown(
         min-height: 36px !important;
         width: 100% !important;
     }
+
+    /* استایل‌های اختصاصی موتور تمرکز تک‌مسیره (Monofocus) */
+    .focus-card {
+        padding: 24px;
+        border-radius: 12px;
+        background-color: #1e222d;
+        border: 1px solid #2a2e39;
+        margin-bottom: 20px;
+    }
+    .badge-focus {
+        display: inline-block;
+        padding: 4px 10px;
+        border-radius: 6px;
+        background-color: #ff9800;
+        color: #121212;
+        font-weight: bold;
+        font-size: 13px;
+    }
     </style>
     """,
     unsafe_allow_html=True,
 )
+
+# ==========================================
+# توابع و متغیرهای کمکی Monofocus (کد دوم)
+# ==========================================
+DATA_FILE = "focus_flow_data.json"
+
+def load_focus_data():
+    if os.path.exists(DATA_FILE):
+        with open(DATA_FILE, "r", encoding="utf-8") as f:
+            return json.load(f)
+    return {"active_task": None, "backlog": [], "completed": []}
+
+def save_focus_data(data):
+    with open(DATA_FILE, "w", encoding="utf-8") as f:
+        json.dump(data, f, ensure_ascii=False, indent=2)
+
+focus_data = load_focus_data()
 
 ROUTINE_TASKS = [
     "--- انتخاب روتین ---",
@@ -512,7 +549,7 @@ st.write("")
 # ==========================================
 tab_goals, tab_plan, tab_log, tab_analytics = st.tabs(
     [
-        "🎯 ۱. اهداف و تایم‌لاین (Goals)",
+        "🎯 ۱. اهداف، تمرکز تک‌مسیره و تایم‌لاین (Goals & Monofocus)",
         "🌅 ۲. برنامه‌ریزی روزها (Plan)",
         "⏱️ ۳. ثبت واقعی عملکرد (Time Audit)",
         "📈 ۴. آنالیز و عارضه‌یابی زمان (Analytics)",
@@ -520,10 +557,132 @@ tab_goals, tab_plan, tab_log, tab_analytics = st.tabs(
 )
 
 # ----------------------------------------------------
-# تب اول: اهداف
+# تب اول: اهداف + موتور تمرکز تک‌مسیره (Monofocus & Backlog)
 # ----------------------------------------------------
 with tab_goals:
-    st.subheader("🎯 مدیریت اهداف، پروژه‌ها و تایم‌لاین")
+    # --------------------------------------------------------
+    # بخش جدید: موتور تمرکز تک‌مسیره (Monofocus) و پارکینگ ایده‌ها
+    # --------------------------------------------------------
+    st.subheader("🎯 سیستم تمرکز تک‌مسیره (Monofocus) و پارکینگ افکار جانبی")
+    st.caption("برای جلوگیری از باز شدن شاخه‌های موازی و پراکندگی؛ تنها یک کار اصلی را قفل کنید و بقیه شاخه‌ها را در پارکینگ قرار دهید.")
+
+    col_focus_main, col_focus_backlog = st.columns([1.5, 1], gap="large")
+
+    with col_focus_main:
+        if focus_data["active_task"]:
+            f_task = focus_data["active_task"]
+            st.markdown(f"""
+                <div class="focus-card">
+                    <span class="badge-focus">در حال اجرا - تک‌شاخه فعال</span>
+                    <h2 style="margin-top: 12px; font-size: 1.4rem;">{f_task['title']}</h2>
+                    <p style="color: #94A3B8; font-size: 0.95rem;"><b>مرز خروجی و شرط اتمام (DoD):</b> {f_task['dod']}</p>
+                    <small style="color: #64748B;">زمان شروع: {f_task['started_at']}</small>
+                </div>
+            """, unsafe_allow_html=True)
+
+            col_f_btn1, col_f_btn2 = st.columns(2)
+            with col_f_btn1:
+                if st.button("✅ بستن و اتمام تسک", use_container_width=True, type="primary", key="btn_close_monofocus"):
+                    focus_data["completed"].append({
+                        "title": f_task["title"],
+                        "dod": f_task["dod"],
+                        "finished_at": datetime.now().strftime("%Y-%m-%d %H:%M")
+                    })
+                    focus_data["active_task"] = None
+                    save_focus_data(focus_data)
+                    st.rerun()
+            with col_f_btn2:
+                if st.button("⏸️ لغو یا برگرداندن به پارکینگ", use_container_width=True, key="btn_pause_monofocus"):
+                    focus_data["backlog"].append({
+                        "id": int(datetime.now().timestamp()),
+                        "title": f_task["title"],
+                        "tag": "ادامه تسک قبلی",
+                        "created_at": datetime.now().strftime("%Y-%m-%d %H:%M")
+                    })
+                    focus_data["active_task"] = None
+                    save_focus_data(focus_data)
+                    st.rerun()
+        else:
+            st.info("در حال حاضر هیچ شاخه‌ای فعال نیست. یک کار را مشخص کن و فقط روی آن قفل شو.")
+            with st.form("new_focus_task_in_tab"):
+                st.markdown("##### 🔒 تعریف شاخه و هدف متمرکز جدید")
+                task_title = st.text_input("تسک یا شاخه اصلی که باید تمام شود:")
+                task_dod = st.text_area(
+                    "مرز خروجی / شرط اتمام (Definition of Done):",
+                    placeholder="دقیقاً چه خروجی‌ای حاصل شود کار تمام است؟ (مثلاً: تست کامل بک‌تست فلان استراتژی بدون دست زدن به UI)"
+                )
+                submit_task = st.form_submit_button("شروع و قفل تمرکز 🔒", use_container_width=True)
+
+                if submit_task and task_title.strip():
+                    if not task_dod.strip():
+                        st.warning("تعریف شرط اتمام الزامی است تا حین کار شاخه جدید باز نکنی.")
+                    else:
+                        focus_data["active_task"] = {
+                            "title": task_title.strip(),
+                            "dod": task_dod.strip(),
+                            "started_at": datetime.now().strftime("%Y-%m-%d %H:%M")
+                        }
+                        save_focus_data(focus_data)
+                        st.rerun()
+
+        # آرشیو کارهای به اتمام رسیده
+        with st.expander(f"📦 کارهای تمام‌شده تک‌مسیره ({len(focus_data['completed'])})", expanded=False):
+            if not focus_data["completed"]:
+                st.write("هنوز کاری به پایان نرسیده است.")
+            for done in reversed(focus_data["completed"]):
+                st.write(f"✔️ **{done['title']}** — پایان: `{done['finished_at']}`")
+                st.caption(f"خروجی تحویل‌شده: {done['dod']}")
+                st.divider()
+
+    with col_focus_backlog:
+        st.markdown("##### 💡 پارکینگ ایده‌ها (Backlog)")
+        st.caption("هر فکر جانبی یا شاخه متفرقه‌ای که حین کار به ذهنت رسید اینجا پارک کن:")
+
+        with st.form("add_backlog_form_tab", clear_on_submit=True):
+            new_idea = st.text_input("ایده یا شاخه جانبی:")
+            idea_tag = st.text_input("برچسب یا دسته‌بندی (اختیاری):", placeholder="مثلاً: طراحی، ترید، بهینه‌سازی")
+            submitted = st.form_submit_button("پارک کن 📥", use_container_width=True)
+            if submitted and new_idea.strip():
+                focus_data["backlog"].append({
+                    "id": int(datetime.now().timestamp()),
+                    "title": new_idea.strip(),
+                    "tag": idea_tag.strip() if idea_tag else "عمومی",
+                    "created_at": datetime.now().strftime("%Y-%m-%d %H:%M")
+                })
+                save_focus_data(focus_data)
+                st.success("ایده پارک شد.")
+                st.rerun()
+
+        st.write(f"**موارد پارک‌شده در صف:** {len(focus_data['backlog'])}")
+        for b_item in list(focus_data["backlog"]):
+            col_b_text, col_b_act = st.columns([3.5, 1.5])
+            with col_b_text:
+                st.markdown(f"• **{b_item['title']}** `[{b_item['tag']}]`")
+            with col_b_act:
+                c_del_b, c_pro_b = st.columns(2)
+                with c_del_b:
+                    if st.button("🗑️", key=f"del_b_{b_item['id']}", help="حذف ایده"):
+                        focus_data["backlog"] = [x for x in focus_data["backlog"] if x["id"] != b_item["id"]]
+                        save_focus_data(focus_data)
+                        st.rerun()
+                with c_pro_b:
+                    if focus_data["active_task"] is None:
+                        if st.button("🚀", key=f"promo_b_{b_item['id']}", help="تبدیل به شاخه فعال"):
+                            focus_data["active_task"] = {
+                                "title": b_item["title"],
+                                "dod": "انتقال‌یافته از پارکینگ",
+                                "started_at": datetime.now().strftime("%Y-%m-%d %H:%M")
+                            }
+                            focus_data["backlog"] = [x for x in focus_data["backlog"] if x["id"] != b_item["id"]]
+                            save_focus_data(focus_data)
+                            st.rerun()
+
+    # --------------------------------------------------------
+    # بخش اصلی اهداف ابری (کد اول بدون کوچک‌ترین تغییر)
+    # --------------------------------------------------------
+    st.write("")
+    st.markdown("<hr style='margin: 25px 0; border: none; border-top: 2px dashed rgba(148, 163, 184, 0.3);' />", unsafe_allow_html=True)
+    st.subheader("🎯 مدیریت اهداف کلان، پروژه‌ها و تایم‌لاین ابری")
     st.caption("اهداف بلندمدت و کوتاه‌مدت خود را تعریف کنید تا روزمرگی‌های خود را مستقیماً بر مبنای آن‌ها بچینید.")
 
     col_gform, col_glist = st.columns([1.1, 1.9], gap="large")
@@ -1010,105 +1169,8 @@ with tab_log:
         audit_date = jalali_date_picker("تاریخ ثبت وقایع (هماهنگ با تقویم):", default_date=active_date, key="audit_date_pick")
 
     a_df = get_actual_logs(audit_date)
-
-    # مرتب‌سازی رویدادها بر اساس ساعت شروع
-    if not a_df.empty and "start_time" in a_df.columns:
-        a_df = a_df.sort_values(by="start_time").reset_index(drop=True)
-
     total_act_min = a_df["duration_minutes"].sum() if not a_df.empty else 0
     remaining_min = max(0, 1440 - total_act_min)
-
-    # --- ویجت خط زمان ۲۴ ساعته: نمایش دقیق ساعت‌های ثبت‌شده عملکرد و ساعت‌های خالی ---
-    if not a_df.empty:
-        base_d = date.today()
-        timeline_segments_act = []
-        parsed_actuals = []
-
-        for _, r in a_df.iterrows():
-            try:
-                st_time = datetime.strptime(str(r["start_time"]).strip(), "%H:%M").time()
-                en_time = datetime.strptime(str(r["end_time"]).strip(), "%H:%M").time()
-                t_s = datetime.combine(base_d, st_time)
-                t_e = datetime.combine(base_d, en_time)
-                if t_e <= t_s:
-                    t_e += timedelta(days=1)
-                parsed_actuals.append({
-                    "start": t_s,
-                    "end": t_e,
-                    "title": r["title"],
-                    "category": r["category"],
-                    "activity_type": r.get("activity_type", "روتین و ضروری"),
-                    "time_str": f"{r['start_time']} تا {r['end_time']}"
-                })
-            except Exception:
-                continue
-
-        parsed_actuals = sorted(parsed_actuals, key=lambda x: x["start"])
-
-        day_start = datetime.combine(base_d, time(0, 0))
-        day_end = day_start + timedelta(days=1)
-        cur_cursor = day_start
-
-        for item in parsed_actuals:
-            # زمان‌های ثبت‌نشده قبل از این فعالیت
-            if item["start"] > cur_cursor:
-                timeline_segments_act.append({
-                    "Task": "⬜ زمان ثبت‌نشده / خالی",
-                    "Start": cur_cursor,
-                    "End": item["start"],
-                    "Status": "ثبت نشده (خالی)",
-                    "Detail": f"ثبت نشده: {cur_cursor.strftime('%H:%M')} تا {item['start'].strftime('%H:%M')}"
-                })
-            # فعالیت ثبت‌شده
-            timeline_segments_act.append({
-                "Task": item["title"],
-                "Start": max(item["start"], cur_cursor),
-                "End": item["end"],
-                "Status": item["category"],
-                "Detail": f"عملکرد ({item['activity_type']}): {item['time_str']}"
-            })
-            cur_cursor = max(cur_cursor, item["end"])
-
-        # زمان خالی تا پایان ۲۴ ساعت
-        if cur_cursor < day_end:
-            timeline_segments_act.append({
-                "Task": "⬜ زمان ثبت‌نشده / خالی",
-                "Start": cur_cursor,
-                "End": day_end,
-                "Status": "ثبت نشده (خالی)",
-                "Detail": f"ثبت نشده: {cur_cursor.strftime('%H:%M')} تا 24:00"
-            })
-
-        tl_act_df = pd.DataFrame(timeline_segments_act)
-        if not tl_act_df.empty:
-            color_map_act = {"ثبت نشده (خالی)": "#1E293B"}
-            fig_actual_timeline = px.timeline(
-                tl_act_df,
-                x_start="Start",
-                x_end="End",
-                y=["عملکرد ۲۴ ساعته"] * len(tl_act_df),
-                color="Status",
-                hover_data={"Detail": True, "Start": False, "End": False, "Task": True},
-                color_discrete_map=color_map_act
-            )
-            fig_actual_timeline.update_yaxes(visible=False, showticklabels=False)
-            fig_actual_timeline.update_xaxes(
-                range=[day_start, day_end],
-                dtick=7200000,  # هر دو ساعت یک نشانه
-                tickformat="%H:%M",
-                showgrid=True,
-                gridcolor="rgba(148, 163, 184, 0.2)"
-            )
-            fig_actual_timeline.update_layout(
-                font=dict(family="Vazirmatn", size=12),
-                paper_bgcolor="rgba(0,0,0,0)",
-                plot_bgcolor="rgba(0,0,0,0)",
-                height=130,
-                margin=dict(t=5, b=25, l=10, r=10),
-                showlegend=False
-            )
-            st.markdown("##### 🧭 نوار بصری ۲۴ ساعته عملکرد (شناسایی ساعت‌های ثبت‌شده و زمان‌های خالی)")
-            st.plotly_chart(fig_actual_timeline, use_container_width=True)
 
     done_planned_df = get_planned_tasks(audit_date)
     if not done_planned_df.empty:
